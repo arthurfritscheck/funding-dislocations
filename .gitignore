@@ -1,4 +1,14 @@
 .venv/
-data/
 __pycache__/
 .ipynb_checkpoints/
+*.egg-info/
+.pytest_cache/
+
+# Keep the data/ folder layout in git, never the data itself.
+data/*
+!data/raw/
+!data/clean/
+data/raw/*
+data/clean/*
+!data/raw/.gitkeep
+!data/clean/.gitkeep

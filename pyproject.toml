@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "funding-dislocations"
+version = "0.1.0"
+description = "Funding-rate dislocations between Hyperliquid and Binance perpetuals"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.2",
+    "pyarrow>=15",
+    "requests>=2.31",
+    "statsmodels>=0.14",
+    "matplotlib>=3.8",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ipykernel>=6",
+]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["network: hits a live exchange API (deselect with -m 'not network')"]
