@@ -99,6 +99,14 @@ strategy:
 cleaning:
   off_hour_tolerance_min: 5         # funding stamps further than this from the hour are flagged
   binance_intervals_h: [1, 4, 8]    # any other settlement spacing is flagged
+  # Checked suspect_missing settlements: the listed settlement keeps the neighbouring interval and
+  # the settlement before it counts as missing (zero funding in P&L, last value carried forward).
+  # Unlisted suspect_missing rows keep their measured interval and flag until checked.
+  binance_missing_settlements:
+    - {symbols: [WIFUSDT, TIAUSDT, 1000BONKUSDT, TAOUSDT], settle: "2026-06-24T08:00", interval_h: 4}
+  hl_funding_cap_per_hour: 0.04     # Hyperliquid cap, 4% per hour
+  cap_near_frac: 0.95               # |rate| >= this share of the cap is flagged "near cap"
+  spread_flag_abs: 0.02             # |log price spread| above this is flagged
 
 # --- Data locations ----------------------------------------------------------------
 paths:
