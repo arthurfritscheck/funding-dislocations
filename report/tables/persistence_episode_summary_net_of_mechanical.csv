@@ -1,0 +1,4 @@
+threshold,coin,episodes,censored,median_duration_h,p75_duration_h,mean_abs_gap_apr,share_positive,share_sign_flip,share_end_sign_change,hours_in_episodes
+0.1,BNB,936,0,5,9,0.201095,0.222222,0,0.144231,7043
+0.25,BNB,453,0,5,8,0.346034,0.231788,0,0.0728477,3092
+0.5,BNB,131,0,3,6,0.644842,0.381679,0,0.0534351,719

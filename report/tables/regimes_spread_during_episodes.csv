@@ -1,0 +1,4 @@
+threshold,episodes,median_favourable_bps,mean_favourable_bps,p10_bps,p90_bps,share_favourable,share_adverse_gt_10bps,median_entry_spread_signed_bps
+0.1,2516,0.349707,0.535849,-7.27502,8.81281,0.527424,0.0624006,1.05753
+0.25,799,0.720802,0.591646,-8.39681,9.36959,0.525657,0.0663329,2.11394
+0.5,204,0.803402,1.70521,-8.25343,12.7203,0.578431,0.0686275,5.27916

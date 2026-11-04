@@ -1,0 +1,7 @@
+threshold_apr,cost_bps,coins,episodes,breakeven_h_at_threshold,mean_abs_gap_apr,breakeven_h_at_mean_gap,median_duration_h,p80_duration_h,share_lasting_past_breakeven
+0.1,27,"BTC, ETH",1628,236.52,0.155343,152.256,4,11,0
+0.1,51,"AAVE, APT, AVAX, BNB, DOGE, SOL, SUI, TAO, TIA, WIF, WLD, kBONK, kPEPE",16603,446.76,0.215973,206.859,4,9,0
+0.25,27,"BTC, ETH",447,94.608,0.333735,70.8705,3,9,0
+0.25,51,"AAVE, APT, AVAX, BNB, DOGE, SOL, SUI, TAO, TIA, WIF, WLD, kBONK, kPEPE",7377,178.704,0.388018,115.139,4,8,0
+0.5,27,"BTC, ETH",138,47.304,0.584016,40.4989,4,9,0
+0.5,51,"AAVE, APT, AVAX, BNB, DOGE, SOL, SUI, TAO, TIA, WIF, WLD, kBONK, kPEPE",2607,89.352,0.681945,65.5126,4,8,0

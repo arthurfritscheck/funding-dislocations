@@ -84,3 +84,53 @@ def test_kaplan_meier_hand_computed():
     assert km["t"].tolist() == [0, 2, 3, 6]
     assert km["survival"].tolist() == pytest.approx([1.0, 0.8, 0.4, 0.0])
     assert km_quantile(km, 0.5) == 3.0                           # first t with S(t) <= 0.5
+
+
+# --- Sign-change episodes, break-even carry, spread during episodes --------------------------
+
+from src.analysis.half_life import carry_breakeven, round_trip_cost_bps  # noqa: E402
+from src.analysis.regimes import spread_during_episodes  # noqa: E402
+
+COST_CFG = {"fees": {"hyperliquid": {"taker_bps": 4.5, "maker_bps": 1.5},
+                     "binance": {"taker_bps": 5.0, "maker_bps": 2.0}},
+            "slippage": {"majors_bps": 2.0, "others_bps": 8.0, "majors": ["BTC", "ETH"]},
+            "execution": {"hyperliquid_leg": "taker", "binance_leg": "taker"}}
+
+
+def test_episodes_end_on_sign_change_and_restart():
+    # theta = 10%: +0.12 starts; -0.15 flips sign above theta -> ends and starts a new episode;
+    # +0.07 flips back but |g| < theta -> ends without a new one; 0.11, 0.06, 0.04 -> one more.
+    g = np.array([0.12, 0.09, -0.15, -0.20, 0.07, 0.02, 0.11, 0.06, 0.04])
+    e = episodes(g, np.arange(len(g)) * H, 0.10, end_on_sign_change=True)
+    assert e["duration_h"].tolist() == [2, 2, 2]
+    assert e["sign"].tolist() == [1, -1, 1]
+    assert e["end_reason"].tolist() == ["sign_change", "sign_change", "below_half"]
+    assert not e["sign_flip"].any()
+
+
+def test_round_trip_cost_four_taker_fills():
+    assert round_trip_cost_bps(COST_CFG, "BTC") == pytest.approx(2 * (4.5 + 2) + 2 * (5.0 + 2))   # 27
+    assert round_trip_cost_bps(COST_CFG, "WIF") == pytest.approx(2 * (4.5 + 8) + 2 * (5.0 + 8))   # 51
+
+
+def test_carry_breakeven_hours():
+    eps = pd.DataFrame({"coin": ["BTC"] * 4, "threshold": [0.10] * 4,
+                        "duration_h": [2, 4, 6, 300], "censored": [False] * 4,
+                        "mean_abs_gap_apr": [0.15, 0.15, 0.15, 0.15]})
+    t = carry_breakeven(eps, COST_CFG).loc[(0.10, 27.0)]
+    assert t["breakeven_h_at_threshold"] == pytest.approx(0.0027 / (0.10 / APR))     # 236.52 h
+    assert t["breakeven_h_at_mean_gap"] == pytest.approx(0.0027 / (0.15 / APR))      # 157.68 h
+    assert t["median_duration_h"] == 4.0 and t["p80_duration_h"] == 300.0
+    assert t["share_lasting_past_breakeven"] == pytest.approx(0.25)
+
+
+def test_spread_move_signed_in_favour_of_the_trade():
+    # Episode with positive gap (short HL, long BN) from row 2 for 2 hours: entry price time = row 1
+    # spread, exit price time = row 3 spread. Spread narrows 10 -> 4 bps: +6 bps in favour.
+    panel = pd.DataFrame({"coin": "X", "hour": T0 + np.arange(5) * H,
+                          "spread": [0.0, 0.0010, 0.0008, 0.0004, 0.0]})
+    eps = pd.DataFrame({"coin": ["X"], "threshold": [0.25], "start_hour": [T0 + 2 * H],
+                        "duration_h": [2], "censored": [False], "sign": [1]})
+    se = spread_during_episodes(panel, eps)
+    assert se["favourable_bps"].iloc[0] == pytest.approx(6.0)
+    assert se["entry_spread_signed_bps"].iloc[0] == pytest.approx(10.0)
