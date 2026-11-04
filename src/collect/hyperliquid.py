@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import math
-import os
 import sys
 import time
 from dataclasses import dataclass
@@ -22,6 +21,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
+from src.collect import store
 from src.config import ROOT, load_config, period_ms
 
 VENUE = "hyperliquid"
@@ -139,13 +139,7 @@ def raw_path(dataset: str, coin: str, root: Path | None = None) -> Path:
 def merge(existing: pd.DataFrame, new: pd.DataFrame, dataset: str) -> pd.DataFrame:
     """Union of both frames; on duplicate (coin, timestamp) the most recent fetch wins."""
     ds = DATASETS[dataset]
-    frames = [f for f in (existing, new) if not f.empty]
-    if not frames:
-        return pd.DataFrame()
-    df = pd.concat(frames, ignore_index=True)
-    df = df.sort_values([ds.key, "fetched_at"], kind="stable")
-    df = df.drop_duplicates(subset=[ds.coin_col, ds.key], keep="last")
-    return df.reset_index(drop=True)
+    return store.merge(existing, new, ds.key, ds.coin_col)
 
 
 def update(dataset: str, coin: str, start_ms: int, end_ms: int,
@@ -157,25 +151,12 @@ def update(dataset: str, coin: str, start_ms: int, end_ms: int,
     """
     ds = DATASETS[dataset]
     path = raw_path(dataset, coin, root)
-    existing = pd.read_parquet(path) if path.exists() else pd.DataFrame()
-    if existing.empty:
-        ranges = [(start_ms, end_ms)]
-    else:
-        lo, hi = int(existing[ds.key].min()), int(existing[ds.key].max())
-        ranges = []
-        if start_ms < lo:
-            ranges.append((start_ms, lo))
-        if hi < end_ms:
-            ranges.append((max(hi, start_ms), end_ms))
-    new_parts = [fetch(dataset, coin, a, b, client) for a, b in ranges if a < b]
-    new = pd.concat([p for p in new_parts if not p.empty], ignore_index=True) \
-        if any(not p.empty for p in new_parts) else pd.DataFrame()
+    existing = store.read(path)
+    ranges = store.missing_ranges(existing, ds.key, start_ms, end_ms)
+    new = store.concat_nonempty([fetch(dataset, coin, a, b, client) for a, b in ranges])
     merged = merge(existing, new, dataset)
     if not merged.empty:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".parquet.tmp")
-        merged.to_parquet(tmp, index=False)
-        os.replace(tmp, path)
+        store.write_atomic(merged, path)
     return {"coin": coin, "dataset": dataset, "before": len(existing),
             "fetched": len(new), "after": len(merged)}
 

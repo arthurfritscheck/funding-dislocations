@@ -71,3 +71,52 @@ def test_merge_keeps_latest_fetch_on_duplicates():
     out = hl.merge(old, new, "candles_1h")
     assert list(out["t"]) == [0, 1]
     assert list(out["c"]) == ["1.0", "2.5"]
+
+
+# --- Binance -------------------------------------------------------------------------
+
+from src.collect import binance as bn  # noqa: E402
+
+
+@pytest.mark.network
+def test_binance_btc_known_day_funding_rows():
+    # 2025-01-15 is inside the design period. 3, 6 or 24 settlements depending on the interval.
+    start = day_start_ms("2025-01-15")
+    df = bn.fetch("funding", "BTC", start, start + DAY, symbol="BTCUSDT")
+    assert len(df) in (3, 6, 24)
+    assert df["fundingTime"].is_unique
+
+
+class FakeBinance:
+    """Serves synthetic 8-hourly settlements the way fundingRate pages them."""
+
+    def __init__(self, start_ms: int, n_rows: int):
+        self.rows = [{"symbol": "BTCUSDT", "fundingTime": start_ms + i * 8 * HOUR + 3,
+                      "fundingRate": "0.0001", "markPrice": "1.0", "rateType": "Regular"}
+                     for i in range(n_rows)]
+        self.calls = 0
+
+    def get(self, path, params=None, funding_limited=False):
+        self.calls += 1
+        lo, hi, limit = params["startTime"], params["endTime"], params["limit"]
+        return [r for r in self.rows if lo <= r["fundingTime"] <= hi][:limit]
+
+
+def test_binance_fetch_paginates_until_short_page():
+    start = day_start_ms("2025-01-01")
+    client = FakeBinance(start, 2500)
+    df = bn.fetch("funding", "BTC", start, start + 2500 * 8 * HOUR, client, symbol="BTCUSDT")
+    assert len(df) == 2500 and df["fundingTime"].is_unique
+    assert client.calls == 3  # pages of 1000, 1000, 500
+
+
+def test_binance_update_is_idempotent(tmp_path):
+    start = day_start_ms("2025-01-01")
+    client = FakeBinance(start, 300)
+    end = start + 300 * 8 * HOUR
+    s1 = bn.update("funding", "BTC", start + 100 * 8 * HOUR, end, client, tmp_path, "BTCUSDT")
+    s2 = bn.update("funding", "BTC", start, end, client, tmp_path, "BTCUSDT")
+    s3 = bn.update("funding", "BTC", start, end, client, tmp_path, "BTCUSDT")
+    assert (s1["after"], s2["after"], s3["after"]) == (200, 300, 300)
+    stored = pd.read_parquet(bn.raw_path("funding", "BTC", tmp_path))
+    assert stored["fundingTime"].is_unique and "fetched_at" in stored.columns

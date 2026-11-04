@@ -95,6 +95,11 @@ strategy:
   max_concurrent_positions: null
   max_positions_per_coin: null
 
+# --- Cleaning (DECISIONS.md, 2026-11-04) -------------------------------------------
+cleaning:
+  off_hour_tolerance_min: 5         # funding stamps further than this from the hour are flagged
+  binance_intervals_h: [1, 4, 8]    # any other settlement spacing is flagged
+
 # --- Data locations ----------------------------------------------------------------
 paths:
   raw: data/raw        # data/raw/<venue>/<dataset>/<coin>.parquet
