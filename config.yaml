@@ -26,7 +26,8 @@ universe:
   min_coins: 12
   max_coins: 15
   anchors: [BTC, ETH, SOL]
-  coins: []          # PLACEHOLDER: fill in after ranking; record list + rule in DECISIONS.md
+  # Fixed 2026-11-04 (DECISIONS.md), from report/universe_candidates.csv; ordered by rank.
+  coins: [BTC, ETH, SOL, kPEPE, SUI, WIF, TIA, DOGE, WLD, AAVE, APT, kBONK, AVAX, TAO, BNB]
 
 # Hand-written symbol map, one entry per coin in universe.coins.
 # unit: how many base-coin units one contract price refers to (1 for normal contracts,
@@ -34,7 +35,22 @@ universe:
 # Example:
 #   BTC:   {hyperliquid: BTC,   binance: BTCUSDT,      hl_unit: 1,    bn_unit: 1}
 #   kPEPE: {hyperliquid: kPEPE, binance: 1000PEPEUSDT, hl_unit: 1000, bn_unit: 1000}
-symbols: {}
+symbols:
+  BTC:   {hyperliquid: BTC,   binance: BTCUSDT,      hl_unit: 1,    bn_unit: 1}
+  ETH:   {hyperliquid: ETH,   binance: ETHUSDT,      hl_unit: 1,    bn_unit: 1}
+  SOL:   {hyperliquid: SOL,   binance: SOLUSDT,      hl_unit: 1,    bn_unit: 1}
+  kPEPE: {hyperliquid: kPEPE, binance: 1000PEPEUSDT, hl_unit: 1000, bn_unit: 1000}
+  SUI:   {hyperliquid: SUI,   binance: SUIUSDT,      hl_unit: 1,    bn_unit: 1}
+  WIF:   {hyperliquid: WIF,   binance: WIFUSDT,      hl_unit: 1,    bn_unit: 1}
+  TIA:   {hyperliquid: TIA,   binance: TIAUSDT,      hl_unit: 1,    bn_unit: 1}
+  DOGE:  {hyperliquid: DOGE,  binance: DOGEUSDT,     hl_unit: 1,    bn_unit: 1}
+  WLD:   {hyperliquid: WLD,   binance: WLDUSDT,      hl_unit: 1,    bn_unit: 1}
+  AAVE:  {hyperliquid: AAVE,  binance: AAVEUSDT,     hl_unit: 1,    bn_unit: 1}
+  APT:   {hyperliquid: APT,   binance: APTUSDT,      hl_unit: 1,    bn_unit: 1}
+  kBONK: {hyperliquid: kBONK, binance: 1000BONKUSDT, hl_unit: 1000, bn_unit: 1000}
+  AVAX:  {hyperliquid: AVAX,  binance: AVAXUSDT,     hl_unit: 1,    bn_unit: 1}
+  TAO:   {hyperliquid: TAO,   binance: TAOUSDT,      hl_unit: 1,    bn_unit: 1}
+  BNB:   {hyperliquid: BNB,   binance: BNBUSDT,      hl_unit: 1,    bn_unit: 1}
 
 # --- Fees (basis points of notional per fill; 1 bp = 0.01%) -----------------------
 fees:
