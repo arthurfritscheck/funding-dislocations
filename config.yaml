@@ -85,10 +85,20 @@ margin:
   transfer_delay_hours: null
 
 # --- Strategy (decided in writing after Phase 3, prompt 2.4) -----------------------
+# Baseline signal (DECISIONS.md, 2026-11-04; replaces the plan's 20% APR / 3-hour rule):
+# signal = per-coin trailing mean of the known-at-t gap over signal_window_days; enter when
+# |signal| > theta_in_apr, shorting the higher-funding venue and going long the other; exit when
+# |signal| < theta_out_apr or the signal changes sign. No regime filters in the baseline.
 strategy:
-  theta_in_apr: null
-  confirm_hours: null      # k consecutive hours above theta_in
-  theta_out_apr: null
+  signal: trailing_mean_known_gap
+  signal_window_days: 7
+  robustness_window_days: [14, 30]   # robustness checks only; never used to re-pick parameters
+  regime_filters: []                 # none in the baseline
+  theta_in_apr: 0.10
+  confirm_hours: 0         # no k-hour confirmation; the 7-day mean replaces it
+  theta_out_apr: 0.03
+  exit_on_sign_change: true
+  direction: short_higher_funding    # short the venue with higher funding, long the other
   max_hold_hours: null
   spread_stop_frac: null
   notional_per_position_usd: null
