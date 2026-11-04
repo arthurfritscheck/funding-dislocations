@@ -115,6 +115,10 @@ analysis:
   # settlement, i.e. 0.005% for 4h and 0.00125% for 1h symbols). A rate within the tolerance
   # counts as resting. The most frequent observed rate is reported only as a sanity check.
   interest_rate_per_8h: 0.0001
+  # Per-symbol Binance overrides, from Binance's GET /fapi/v1/premiumIndex `interestRate`
+  # (snapshot 2026-11-04, assumed constant over the sample; DECISIONS.md).
+  binance_interest_overrides_per_8h:
+    BNBUSDT: 0.0
   resting_tolerance_per_hour: 1.0e-10
   gap_thresholds_apr: [0.10, 0.25, 0.50]
   baseline_window_days: 30           # trailing window separating the slow-moving part of the gap

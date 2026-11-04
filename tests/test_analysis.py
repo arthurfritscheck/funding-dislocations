@@ -52,3 +52,35 @@ def test_structural_baseline_split():
     assert s["std_fast_apr"] == pytest.approx(0.0, abs=1e-9)
     assert s["share_months_positive"] == 1.0
     assert s["share_hours_both_at_rest"] == 0.0
+
+
+# --- Persistence (src/analysis/half_life.py) -------------------------------------------------
+
+from src.analysis.half_life import episodes, half_life, kaplan_meier, km_quantile  # noqa: E402
+
+
+def test_half_life_formula():
+    assert half_life(0.5) == pytest.approx(1.0)                  # halves every period
+    assert half_life(0.25) == pytest.approx(0.5)
+    assert half_life(2 ** -0.5) == pytest.approx(2.0)
+    assert np.isnan(half_life(0.0)) and np.isnan(half_life(-0.3))
+    assert half_life(1.0) == np.inf
+
+
+def test_episodes_hysteresis_censoring_and_sign_flip():
+    # theta = 10% APR: start above 0.10, end below 0.05.
+    g = np.array([0.02, 0.12, 0.08, 0.06, 0.04, 0.11, -0.07, 0.03, 0.15, 0.20])
+    e = episodes(g, np.arange(len(g)) * H, 0.10)
+    assert e["duration_h"].tolist() == [3, 2, 2]                 # hours 1-3, 5-6, 8-9 (open)
+    assert e["censored"].tolist() == [False, False, True]
+    assert e["sign"].tolist() == [1, 1, 1]
+    assert e["sign_flip"].tolist() == [False, True, False]       # 0.11 then -0.07 stays |g| >= 0.05
+    assert e["mean_abs_gap_apr"].iloc[0] == pytest.approx((0.12 + 0.08 + 0.06) / 3)
+
+
+def test_kaplan_meier_hand_computed():
+    # Durations 2, 3, 3, 5 (censored), 6: S(2)=4/5, S(3)=4/5*2/4=0.4, S(6)=0 (5 is censored).
+    km = kaplan_meier(np.array([2, 3, 3, 5, 6]), np.array([False, False, False, True, False]))
+    assert km["t"].tolist() == [0, 2, 3, 6]
+    assert km["survival"].tolist() == pytest.approx([1.0, 0.8, 0.4, 0.0])
+    assert km_quantile(km, 0.5) == 3.0                           # first t with S(t) <= 0.5

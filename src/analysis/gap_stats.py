@@ -74,26 +74,37 @@ def _at_rest(f_hourly: pd.Series, interest_8h: float, tol: float) -> pd.Series:
 
 
 def resting_rates(panel: pd.DataFrame, interest_8h: float = INTEREST_8H,
-                  tol: float = REST_TOL) -> pd.DataFrame:
+                  tol: float = REST_TOL, bn_interest_8h: dict | None = None) -> pd.DataFrame:
     """Per coin and venue: the documented resting rate and how often funding sits at it.
 
-    The resting rate is the documented interest baseline, 0.01% per 8h on both venues (hourly
-    equivalent 0.0000125). As a sanity check the most frequent observed hourly rate is reported
-    too; `modal_differs_*` flags a coin whose modal rate is not the documented baseline.
+    The resting rate is the documented interest baseline, 0.01% per 8h (hourly equivalent
+    0.0000125), on Hyperliquid for every coin and on Binance unless `bn_interest_8h` gives a
+    per-coin override (Binance's reported `interestRate`, e.g. 0 for BNB). The mechanical gap is
+    HL rest - BN rest. As a sanity check the most frequent observed hourly rate is reported too;
+    `modal_differs_*` flags a coin whose modal rate is not that venue's baseline.
     """
-    rest_h = interest_8h / 8
+    bn_interest_8h = bn_interest_8h or {}
+    hl_rest = interest_8h / 8
     rows = []
     for coin, d in panel.groupby("coin", observed=True):
+        bn_i8 = bn_interest_8h.get(str(coin), interest_8h)
+        bn_rest = bn_i8 / 8
         hl, bn = d["f_hl_realised"].dropna(), d["f_bn_realised"].dropna()
         hl_mode, bn_mode = _mode(hl), _mode(bn)
-        rows.append({"coin": coin, "hl_rest_per_hour": rest_h, "bn_rest_per_hour": rest_h,
+        rows.append({"coin": coin, "hl_rest_per_hour": hl_rest, "bn_rest_per_hour": bn_rest,
                      "hl_share_at_rest": _at_rest(hl, interest_8h, tol).mean(),
-                     "bn_share_at_rest": _at_rest(bn, interest_8h, tol).mean(),
-                     "mechanical_gap_apr": 0.0,
+                     "bn_share_at_rest": _at_rest(bn, bn_i8, tol).mean(),
+                     "mechanical_gap_apr": (hl_rest - bn_rest) * APR,
                      "hl_modal_per_hour": hl_mode, "bn_modal_per_hour": bn_mode,
-                     "modal_differs_hl": abs(hl_mode - rest_h) > tol,
-                     "modal_differs_bn": abs(bn_mode - rest_h) > tol})
+                     "modal_differs_hl": abs(hl_mode - hl_rest) > tol,
+                     "modal_differs_bn": abs(bn_mode - bn_rest) > tol})
     return pd.DataFrame(rows).set_index("coin")
+
+
+def binance_interest_by_coin(cfg: dict) -> dict:
+    """{coin: Binance interest per 8h} for coins whose Binance symbol has an override."""
+    over = cfg["analysis"].get("binance_interest_overrides_per_8h") or {}
+    return {coin: over[s["binance"]] for coin, s in cfg["symbols"].items() if s["binance"] in over}
 
 
 def venue_funding(panel: pd.DataFrame) -> pd.DataFrame:
@@ -118,11 +129,12 @@ def venue_funding(panel: pd.DataFrame) -> pd.DataFrame:
 
 
 def structural_baseline(panel: pd.DataFrame, window_days: int = 30,
-                        interest_8h: float = INTEREST_8H, tol: float = REST_TOL) -> pd.DataFrame:
+                        interest_8h: float = INTEREST_8H, tol: float = REST_TOL,
+                        bn_interest_8h: dict | None = None) -> pd.DataFrame:
     """Separate the constant and slow-moving parts of the gap from its fluctuations.
 
-    mechanical_gap_apr  gap when both venues rest at the documented interest baseline (0 here,
-                        since the baseline is the same on both venues)
+    mechanical_gap_apr  gap when both venues rest at their interest baseline (0 when the two
+                        baselines are equal; +10.95% APR for BNB, whose Binance baseline is 0)
     slow  = trailing `window_days` mean of the hourly gap (uses only past hours)
     fast  = gap - slow
     Reported per coin, in APR: the full-period mean gap, the mechanical gap, the std of `slow`
@@ -130,7 +142,8 @@ def structural_baseline(panel: pd.DataFrame, window_days: int = 30,
     months whose mean gap is positive, and the share of hours when both venues' known rates sit at
     the documented baseline (where the gap equals the mechanical gap).
     """
-    rest = resting_rates(panel, interest_8h, tol)
+    bn_interest_8h = bn_interest_8h or {}
+    rest = resting_rates(panel, interest_8h, tol, bn_interest_8h)
     w = window_days * 24
     rows = []
     for coin, d in panel.groupby("coin", observed=True):
@@ -142,7 +155,8 @@ def structural_baseline(panel: pd.DataFrame, window_days: int = 30,
         month = pd.to_datetime(d["hour"], unit="ms", utc=True).dt.strftime("%Y-%m")
         monthly = g.groupby(month).mean()
         r = rest.loc[coin]
-        both = _at_rest(d["f_hl_known"], interest_8h, tol) & _at_rest(d["f_bn_known"], interest_8h, tol)
+        bn_i8 = bn_interest_8h.get(str(coin), interest_8h)
+        both = _at_rest(d["f_hl_known"], interest_8h, tol) & _at_rest(d["f_bn_known"], bn_i8, tol)
         rows.append({"coin": coin, "mean_gap_apr": g.mean(),
                      "mechanical_gap_apr": r["mechanical_gap_apr"],
                      "mean_gap_ex_mechanical_apr": g.mean() - r["mechanical_gap_apr"],
@@ -226,10 +240,12 @@ def run(cfg: dict | None = None) -> dict:
     out = {"gap_summary": gap_summary(panel, a["gap_thresholds_apr"]),
            "venue_funding": venue_funding(panel),
            "resting_rates": resting_rates(panel, a["interest_rate_per_8h"],
-                                          a["resting_tolerance_per_hour"]),
+                                          a["resting_tolerance_per_hour"],
+                                          binance_interest_by_coin(cfg)),
            "structural_baseline": structural_baseline(panel, a["baseline_window_days"],
                                                       a["interest_rate_per_8h"],
-                                                      a["resting_tolerance_per_hour"])}
+                                                      a["resting_tolerance_per_hour"],
+                                                      binance_interest_by_coin(cfg))}
     for name, df in out.items():
         df.to_csv(TABLES / f"eda_{name}.csv", float_format="%.6g")
     out["fig_gap_over_time"] = plot_gap_over_time(panel, ["BTC", a["mid_cap_example"]],
