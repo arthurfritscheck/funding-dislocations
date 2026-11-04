@@ -238,7 +238,7 @@ def main(argv: list[str] | None = None) -> None:
     out = ROOT / cfg["paths"]["clean"] / "panel.parquet"
     out.parent.mkdir(parents=True, exist_ok=True)
     panel.to_parquet(out, index=False)
-    report = checks.write_report(panel, cfg, args.period, ROOT / "reports" / "data_quality.md")
+    report = checks.write_report(panel, cfg, args.period, ROOT / "report" / "data_quality.md")
     print(f"panel: {len(panel):,} rows -> {out.relative_to(ROOT)}; report -> {report.relative_to(ROOT)}")
 
 

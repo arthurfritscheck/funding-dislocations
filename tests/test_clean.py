@@ -199,7 +199,7 @@ def test_panel_btc_factor_of_eight(panel):
 @needs_panel
 @pytest.mark.network
 def test_panel_spot_check_five_coin_hours_against_api(panel):
-    """The automated half of the spot check; reports/data_quality.md lists the same rows by hand."""
+    """The automated half of the spot check; report/data_quality.md lists the same rows by hand."""
     cfg = load_config()
     for _, r in checks.spot_check_sample(panel).iterrows():
         sym = cfg["symbols"][r.coin]

@@ -108,6 +108,20 @@ cleaning:
   cap_near_frac: 0.95               # |rate| >= this share of the cap is flagged "near cap"
   spread_flag_abs: 0.02             # |log price spread| above this is flagged
 
+# --- Analysis (Phase 3) ------------------------------------------------------------
+analysis:
+  # Resting rate = documented interest baseline, the funding rate when the premium sits inside
+  # the clamp: 0.01% per 8h on both venues (0.00125% per hour; on Binance 0.01% x interval/8 per
+  # settlement, i.e. 0.005% for 4h and 0.00125% for 1h symbols). A rate within the tolerance
+  # counts as resting. The most frequent observed rate is reported only as a sanity check.
+  interest_rate_per_8h: 0.0001
+  resting_tolerance_per_hour: 1.0e-10
+  gap_thresholds_apr: [0.10, 0.25, 0.50]
+  baseline_window_days: 30           # trailing window separating the slow-moving part of the gap
+  # Example mid-cap for the gap-over-time chart, fixed before computing gap statistics: the
+  # median non-anchor coin by Aug-Oct 2024 HL volume (6th of the 12 non-anchor coins).
+  mid_cap_example: WLD
+
 # --- Data locations ----------------------------------------------------------------
 paths:
   raw: data/raw        # data/raw/<venue>/<dataset>/<coin>.parquet

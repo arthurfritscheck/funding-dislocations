@@ -1,4 +1,4 @@
-"""Data-quality checks on the hourly panel and the reports/data_quality.md writer."""
+"""Data-quality checks on the hourly panel and the report/data_quality.md writer."""
 
 from __future__ import annotations
 

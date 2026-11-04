@@ -1,0 +1,16 @@
+coin,hl_rest_per_hour,bn_rest_per_hour,hl_share_at_rest,bn_share_at_rest,mechanical_gap_apr,hl_modal_per_hour,bn_modal_per_hour,modal_differs_hl,modal_differs_bn
+BTC,1.25e-05,1.25e-05,0.560033,0.178435,0,1.25e-05,1.25e-05,False,False
+ETH,1.25e-05,1.25e-05,0.509658,0.182252,0,1.25e-05,1.25e-05,False,False
+SOL,1.25e-05,1.25e-05,0.445511,0.188931,0,1.25e-05,1.25e-05,False,False
+kPEPE,1.25e-05,1.25e-05,0.565339,0.414122,0,1.25e-05,1.25e-05,False,False
+SUI,1.25e-05,1.25e-05,0.506439,0.253817,0,1.25e-05,1.25e-05,False,False
+WIF,1.25e-05,1.25e-05,0.635627,0.500954,0,1.25e-05,1.25e-05,False,False
+TIA,1.25e-05,1.25e-05,0.435555,0.382395,0,1.25e-05,1.25e-05,False,False
+DOGE,1.25e-05,1.25e-05,0.491058,0.252863,0,1.25e-05,1.25e-05,False,False
+WLD,1.25e-05,1.25e-05,0.584953,0.390267,0,1.25e-05,1.25e-05,False,False
+AAVE,1.25e-05,1.25e-05,0.725528,0.26813,0,1.25e-05,1.25e-05,False,False
+APT,1.25e-05,1.25e-05,0.387862,0.26479,0,1.25e-05,1.25e-05,False,False
+kBONK,1.25e-05,1.25e-05,0.561345,0.50167,0,1.25e-05,1.25e-05,False,False
+AVAX,1.25e-05,1.25e-05,0.532372,0.278149,0,1.25e-05,1.25e-05,False,False
+TAO,1.25e-05,1.25e-05,0.625253,0.52791,0,1.25e-05,1.25e-05,False,False
+BNB,1.25e-05,1.25e-05,0.516752,0,0,1.25e-05,0,False,True
