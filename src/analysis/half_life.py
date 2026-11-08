@@ -378,6 +378,9 @@ def run(cfg: dict | None = None) -> dict:
            "carry_breakeven": carry_breakeven(eps, cfg),
            "rolling": roll, "episodes": eps}
     hl.to_csv(TABLES / "persistence_half_lives.csv", float_format="%.6g")
+    # The daily mean gap the AR(1) is fitted on (APR, day start in UTC ms); final figure 1 reads it.
+    daily_gap(panel).rename_axis(columns=None).to_csv(TABLES / "persistence_daily_gap.csv",
+                                                      float_format="%.6g")
     out["rolling_summary"].to_csv(TABLES / "persistence_rolling_summary.csv", float_format="%.6g")
     out["episode_summary"].to_csv(TABLES / "persistence_episode_summary.csv", float_format="%.6g")
     if out["episode_summary_net_of_mechanical"] is not None:
