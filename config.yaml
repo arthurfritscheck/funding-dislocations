@@ -142,6 +142,7 @@ benchmarks:
 robustness:
   cost_multiples: [0.5, 1.0, 2.0, 3.0]   # fees and slippage, jointly and as a fee x slippage grid
   breakeven_tol: 0.005                   # bisection tolerance on the joint cost multiple
+  # Added after the first backtest run (the plan's case was maker on one leg); labelled post hoc.
   maker_scenario:                        # reported separately; maker fills are not guaranteed
     hyperliquid_leg: maker
     binance_leg: maker
@@ -153,6 +154,8 @@ robustness:
   post_hoc:
     leverage_per_leg: [1.5, 2, 3]
     capital_buffer_frac: [0.0, 0.25, 0.5]
+    tail_event_days: ["2025-10-10", "2025-10-11"]   # UTC days excluded in the tail-event table
+  failure_cases: {n_worst: 5, pad_days: 3}   # worst trades and days shown around each
 
 # --- Cleaning (DECISIONS.md, 2026-11-04) -------------------------------------------
 cleaning:

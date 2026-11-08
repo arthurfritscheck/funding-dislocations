@@ -4,8 +4,9 @@ None of these results may be used to change the baseline parameters.
 
 Checks: cost sensitivity and the breakeven cost multiple; a maker scenario (reported separately);
 the entry/exit/window grid; majors versus the rest and leave-one-coin-out; net P&L by quarter, a
-rolling Sharpe ratio and a block bootstrap of the Sharpe ratio; and leverage x buffer, which are
-sensitivities added after the first backtest run (labelled `POST_HOC` in every table).
+rolling Sharpe ratio and a block bootstrap of the Sharpe ratio. The maker scenario, leverage x
+buffer and the tail-event table are sensitivities added after the first backtest run (labelled
+`POST_HOC` in every table).
 
     python -m src.analysis.robustness      # writes report/tables/robustness_*.csv and figures
 """
@@ -142,7 +143,8 @@ def cost_sensitivity(cfg: dict, inputs: dict) -> tuple[pd.DataFrame, pd.DataFram
 
 def maker_scenario(cfg: dict, inputs: dict, base: E.Result | None = None) -> pd.DataFrame:
     """Baseline (taker on both legs) against both legs maker with reduced slippage: headline
-    metrics and the P&L decomposition, one column each."""
+    metrics and the P&L decomposition, one column each. The maker case is a sensitivity added
+    after the first backtest run (row `label`)."""
     base = base or E.run(cfg, inputs)
     maker = E.run(maker_cfg(cfg), inputs)
     out = {}
@@ -150,7 +152,8 @@ def maker_scenario(cfg: dict, inputs: dict, base: E.Result | None = None) -> pd.
         s = pd.Series(row(r))
         d = M.decomposition(r.trades).loc["ALL"].drop("total")
         out[name] = pd.concat([s, d])
-    out = pd.DataFrame(out)
+    out = pd.DataFrame(out).astype(object)
+    out.loc["label"] = ["baseline", POST_HOC]
     out.loc["round_trip_bps_majors"] = [costs.round_trip_cost_bps(c, "BTC")
                                        for c in (cfg, maker_cfg(cfg))]
     out.loc["round_trip_bps_others"] = [costs.round_trip_cost_bps(c, "SUI")
@@ -302,6 +305,40 @@ def leverage_buffer(cfg: dict, inputs: dict) -> pd.DataFrame:
     return pd.DataFrame(out)
 
 
+def tail_event_split(r: E.Result, days: list[str]) -> dict:
+    """Daily P&L (equity curve, UTC days) with and without the given days, their share of the
+    total, and the liquidations whose leg was liquidated on those days. Removing the days' P&L
+    is not a rerun: positions and re-arming after those days are unchanged."""
+    pnl = M.daily_pnl(r.daily, r.capital)
+    pnl.index = day_index(r.daily)
+    on = pnl.index.normalize().isin(pd.DatetimeIndex(days))
+    total, tail = float(pnl.sum()), float(pnl[on].sum())
+    t = r.trades
+    liq = t[t["exit_reason"] == "liquidation"]
+    liq_day = pd.to_datetime(liq["exit_hour"] - 1, unit="ms").dt.normalize()   # bar end -> its day
+    rest = pnl[~on]
+    return dict(total_pnl=total, pnl_tail_days=tail, pnl_excl_tail_days=total - tail,
+                tail_share_of_total=tail / total if total else np.nan,
+                liquidations=int(len(liq)), liquidations_tail_days=int(liq_day.isin(pd.DatetimeIndex(days)).sum()),
+                ann_return_total_capital=M.annualised_return(pnl, r.capital),
+                ann_return_excl_tail_days=M.annualised_return(rest, r.capital),
+                sharpe=M.sharpe(pnl), sharpe_excl_tail_days=M.sharpe(rest))
+
+
+def tail_event_sensitivity(cfg: dict, inputs: dict) -> pd.DataFrame:
+    """tail_event_split for each post-hoc leverage at the baseline buffer (the buffer does not
+    change P&L)."""
+    p = cfg["robustness"]["post_hoc"]
+    buf = cfg["margin"]["capital_buffer_frac"]
+    out = []
+    for lev in p["leverage_per_leg"]:
+        r = E.run(leverage_buffer_cfg(cfg, lev, buf), inputs)
+        out.append(dict(label=POST_HOC, leverage_per_leg=lev, capital=r.capital,
+                        tail_days=", ".join(p["tail_event_days"]),
+                        **tail_event_split(r, p["tail_event_days"])))
+    return pd.DataFrame(out).set_index("leverage_per_leg")
+
+
 # --- Figures ---------------------------------------------------------------------------------
 
 def plot_heatmap(grid: pd.DataFrame, baseline: dict, path=None):
@@ -424,7 +461,7 @@ def run_all(cfg: dict | None = None, inputs: dict | None = None) -> dict:
     joint, grid, be = cost_sensitivity(cfg, inputs)
     out.update(cost_joint=joint, cost_grid=grid,
                breakeven=pd.Series({"breakeven_cost_multiple": be}))
-    out["maker"] = maker_scenario(cfg, inputs, base)
+    out["maker_post_hoc"] = maker_scenario(cfg, inputs, base)
     out["parameter_grid"] = parameter_grid(cfg, inputs)
     out["universe_split"] = universe_split(cfg, inputs)
     out["leave_one_out"] = leave_one_out(cfg, inputs, base)
@@ -437,6 +474,7 @@ def run_all(cfg: dict | None = None, inputs: dict | None = None) -> dict:
     samples = block_bootstrap_sharpe(pnl, b["block_days"], b["resamples"], b["seed"])
     out["bootstrap"] = bootstrap_summary(pnl, samples, b["ci"], b["block_days"])
     out["leverage_buffer_post_hoc"] = leverage_buffer(cfg, inputs)
+    out["tail_event_post_hoc"] = tail_event_sensitivity(cfg, inputs)
     for k, v in out.items():
         save(v, k)
     s = cfg["strategy"]

@@ -16,5 +16,6 @@ slippage,-6130.794265200526,-3065.397132600263
 transfer_fees,-313.0,-317.0
 liquidation,-4543.932803066764,-4544.923157146711
 price_unrealised,-0.5962407023689593,-0.5962407023689593
+label,baseline,sensitivity added after the first backtest run
 round_trip_bps_majors,27.0,11.0
 round_trip_bps_others,51.0,23.0
