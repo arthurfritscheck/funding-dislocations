@@ -1,4 +1,5 @@
-"""Binance USD-M futures collector: fundingRate, 1h klines, 1h premiumIndexKlines, fundingInfo.
+"""Binance USD-M futures collector: fundingRate, 1h klines, 1h premiumIndexKlines, 1h
+markPriceKlines, 1h indexPriceKlines, fundingInfo.
 
 Raw responses are stored untouched (numbers that arrive as strings stay strings), plus
 ``fetched_at`` in UTC ms. Kline arrays get the column names from the Binance docs and a
@@ -41,6 +42,7 @@ class Dataset:
     limit: int
     funding_limited: bool  # counts toward the shared 500 / 5 min funding-endpoint limit
     interval: str | None = None
+    symbol_param: str = "symbol"  # indexPriceKlines takes the index `pair` instead
 
 
 DATASETS = {
@@ -48,6 +50,11 @@ DATASETS = {
     "klines_1h": Dataset("klines_1h", "/fapi/v1/klines", "open_time", 1500, False, "1h"),
     "premium_index_1h": Dataset("premium_index_1h", "/fapi/v1/premiumIndexKlines", "open_time",
                                 1500, False, "1h"),
+    # Mark price (Binance liquidations) and index price (proxy for Hyperliquid's oracle).
+    "mark_price_1h": Dataset("mark_price_1h", "/fapi/v1/markPriceKlines", "open_time", 1500,
+                             False, "1h"),
+    "index_price_1h": Dataset("index_price_1h", "/fapi/v1/indexPriceKlines", "open_time", 1500,
+                              False, "1h", symbol_param="pair"),
 }
 FUNDING_INFO_PATH = "/fapi/v1/fundingInfo"
 
@@ -130,7 +137,8 @@ def fetch(dataset: str, coin: str, start_ms: int, end_ms: int,
     rows: list[dict] = []
     cursor = start_ms
     while cursor < end_ms:
-        params = {"symbol": symbol, "startTime": cursor, "endTime": end_ms - 1, "limit": ds.limit}
+        params = {ds.symbol_param: symbol, "startTime": cursor, "endTime": end_ms - 1,
+                  "limit": ds.limit}
         if ds.interval:
             params["interval"] = ds.interval
         page = _rows(ds, client.get(ds.path, params, ds.funding_limited), symbol)

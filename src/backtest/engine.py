@@ -12,6 +12,10 @@ Inputs, one frame per coin with one row per hour H (the hour [H, H+1h)):
   ref_px           Binance 1h close at H+1h, the proxy for HL oracle and Binance mark prices
   bar_start        a price bar starts at H; o_hl, o_bn = both venues' opens at H
   bar_end          a price bar ends at H+1h; h_*, l_*, c_* = that bar's high, low and close
+  mh_*, ml_*       optional mark-price high/low over the bar (at bar_end rows) for liquidation
+                   checks: Binance mark klines for the BN leg, Binance index klines as the proxy
+                   for Hyperliquid's oracle-based mark price for the HL leg (DECISIONS.md
+                   2026-11-08). Missing -> the check falls back to the trade high/low (counted).
 Bars are Hyperliquid candles (4h before its hourly history starts, 1h after); Binance 1h klines
 are aggregated over the same span. Hours not covered by a Hyperliquid candle have no boundary:
 funding still accrues there, but nothing is decided or filled.
@@ -51,6 +55,11 @@ STOP_REASONS = ("spread_stop", "liquidation")
 INPUT_COLUMNS = ["hour", "f_hl", "f_bn", "bn_interval_h", "bn_settle", "gap", "signal", "ref_px",
                  "bar_start", "bar_end", "o_hl", "o_bn", "h_hl", "l_hl", "c_hl", "h_bn", "l_bn",
                  "c_bn"]
+MARK_COLUMNS = ["mh_hl", "ml_hl", "mh_bn", "ml_bn"]
+VARIANTS = {"as_specified": {"liquidation_price_source": "last_trade",
+                             "rebalance_trigger_base": "initial_margin"},
+            "corrected": {"liquidation_price_source": "mark",
+                          "rebalance_trigger_base": "current_requirement"}}
 
 
 # --- Inputs --------------------------------------------------------------------------------
@@ -62,9 +71,11 @@ def signal(gap: pd.Series, window_days: float) -> pd.Series:
 
 
 def coin_inputs(panel: pd.DataFrame, hl_1h: pd.DataFrame, hl_4h: pd.DataFrame,
-                bn_1h: pd.DataFrame, hl_unit: float, bn_unit: float,
-                window_days: float) -> pd.DataFrame:
-    """Engine input frame for one coin from its panel rows and raw candles."""
+                bn_1h: pd.DataFrame, hl_unit: float, bn_unit: float, window_days: float,
+                bn_mark: pd.DataFrame | None = None,
+                bn_index: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Engine input frame for one coin from its panel rows and raw candles. `bn_mark` and
+    `bn_index` are Binance 1h mark- and index-price klines (same columns as klines)."""
     p = panel.sort_values("hour").reset_index(drop=True)
     hours = p["hour"].to_numpy("int64")
     start, end, n = int(hours[0]), int(hours[-1]) + HOUR, len(hours)
@@ -88,6 +99,13 @@ def coin_inputs(panel: pd.DataFrame, hl_1h: pd.DataFrame, hl_4h: pd.DataFrame,
     b1 = b1.drop_duplicates("open_time", keep="last")
     bo, bh, bl, bc = (by_hour(b1, "open_time", c, bn_unit) for c in ("open", "high", "low", "close"))
     d["ref_px"] = pd.Series(bc).ffill().to_numpy()
+    marks = {}
+    for name, df in (("bn", bn_mark), ("hl", bn_index)):
+        df = pd.DataFrame() if df is None else df
+        if not df.empty:
+            df = _closed(df, "close_time").drop_duplicates("open_time", keep="last")
+        marks[name] = (by_hour(df, "open_time", "high", bn_unit),
+                       by_hour(df, "open_time", "low", bn_unit))
 
     for c in ("o_hl", "o_bn", "h_hl", "l_hl", "c_hl", "h_bn", "l_bn", "c_bn"):
         d[c] = np.nan
@@ -105,6 +123,7 @@ def coin_inputs(panel: pd.DataFrame, hl_1h: pd.DataFrame, hl_4h: pd.DataFrame,
                              float(l) / hl_unit, float(c) / hl_unit))
     cols = {c: d[c].to_numpy().copy() for c in ("o_hl", "o_bn", "h_hl", "l_hl", "c_hl", "h_bn",
                                                  "l_bn", "c_bn", "bar_start", "bar_end")}
+    cols.update({c: np.full(n, np.nan) for c in MARK_COLUMNS})
     for t, length, o, h, l, c in sorted(bars):
         i, j = (t - start) // HOUR, (t - start) // HOUR + length - 1
         cols["bar_start"][i], cols["bar_end"][j] = True, True
@@ -114,9 +133,15 @@ def coin_inputs(panel: pd.DataFrame, hl_1h: pd.DataFrame, hl_4h: pd.DataFrame,
         cols["h_bn"][j] = np.nanmax(seg_h) if np.isfinite(seg_h).any() else np.nan
         cols["l_bn"][j] = np.nanmin(seg_l) if np.isfinite(seg_l).any() else np.nan
         cols["c_bn"][j] = bc[j]
+        for name, (mh, ml) in marks.items():
+            seg_h, seg_l = mh[i:j + 1], ml[i:j + 1]
+            if np.isfinite(seg_h).any():
+                cols[f"mh_{name}"][j] = np.nanmax(seg_h)
+            if np.isfinite(seg_l).any():
+                cols[f"ml_{name}"][j] = np.nanmin(seg_l)
     for c, v in cols.items():
         d[c] = v
-    return d[INPUT_COLUMNS]
+    return d[INPUT_COLUMNS + MARK_COLUMNS]
 
 
 def load_inputs(cfg: dict, window_days: float | None = None,
@@ -137,10 +162,10 @@ def load_inputs(cfg: dict, window_days: float | None = None,
     for coin in cfg["universe"]["coins"]:
         sym = cfg["symbols"][coin]
         hl = lambda ds: _load(raw / "hyperliquid" / ds / f"{coin}.parquet", "t", end_ms)
+        bn = lambda ds: _load(raw / "binance" / ds / f"{coin}.parquet", "open_time", end_ms)
         out[coin] = coin_inputs(panel[panel["coin"] == coin], hl("candles_1h"), hl("candles_4h"),
-                                _load(raw / "binance" / "klines_1h" / f"{coin}.parquet",
-                                      "open_time", end_ms),
-                                sym["hl_unit"], sym["bn_unit"], window_days)
+                                bn("klines_1h"), sym["hl_unit"], sym["bn_unit"], window_days,
+                                bn_mark=bn("mark_price_1h"), bn_index=bn("index_price_1h"))
     return out
 
 
@@ -160,6 +185,15 @@ def zero_cost(cfg: dict) -> dict:
     for v in costs.VENUES:
         c["fees"][v] = {k: 0.0 for k in c["fees"][v]}
     c["slippage"]["majors_bps"] = c["slippage"]["others_bps"] = 0.0
+    return c
+
+
+def variant_cfg(cfg: dict, variant: str) -> dict:
+    """Copy of cfg with the model settings of a named variant: "as_specified" (liquidation on
+    last-trade highs/lows, rebalance trigger on initial margin) or "corrected" (mark prices,
+    current margin requirement). Nothing else changes."""
+    c = copy.deepcopy(cfg)
+    c["margin"].update(VARIANTS[variant])
     return c
 
 
@@ -307,7 +341,9 @@ class Engine:
         for c in self.coins:
             if not np.array_equal(hours[c], self.hours):
                 raise ValueError(f"{c}: hour grid differs from {self.coins[0]}")
-        self.a = {c: {k: d[k].to_numpy() for k in INPUT_COLUMNS} for c, d in inputs.items()}
+        nan = np.full(len(self.hours), np.nan)
+        self.a = {c: {k: d[k].to_numpy() if k in d else nan for k in INPUT_COLUMNS + MARK_COLUMNS}
+                  for c, d in inputs.items()}
         s, m = cfg["strategy"], cfg["margin"]
         self.notional, self.lev = s["notional_per_position_usd"], m["leverage_per_leg"]
         self.cap = s["max_concurrent_positions"]
@@ -316,13 +352,17 @@ class Engine:
         self.trigger, self.wfee = m["rebalance_trigger_frac"], m["withdrawal_fee_usd"]
         self.delay = m["transfer_delay_hours"] * HOUR
         self.disarm = s.get("rearm_after_stop") == "exit_rule"
+        self.use_mark = m.get("liquidation_price_source", "last_trade") == "mark"
+        self.trigger_on_current = m.get("rebalance_trigger_base",
+                                        "initial_margin") == "current_requirement"
         self.capital = total_capital(cfg)
         self.st = {c: SlotState() for c in self.coins}
         self.cum = dict.fromkeys(COMPONENTS, 0.0)
         self.trades: list[dict] = []
         self.daily: list[dict] = []
         self.n = dict(missing_hl_funding=0, missing_bn_funding=0, deferred_fills=0,
-                      liquidations=0, rebalances=0, rebalance_no_surplus=0, spread_stops=0)
+                      liquidations=0, rebalances=0, rebalance_no_surplus=0, spread_stops=0,
+                      mark_fallbacks=0)
 
     # -- booking --
     def _book(self, pos: Position, key: str, amount: float, leg: Leg | None = None):
@@ -423,6 +463,17 @@ class Engine:
         self._book(pos, "liquidation", -pos.qty * p_liq * self.penalty, leg)
         self.n["liquidations"] += 1
 
+    def _adverse(self, a: dict, key: str, side: int, i: int) -> float:
+        """The leg's adverse price extreme in the bar: high for a short, low for a long; on mark
+        prices when configured, falling back to the trade candle if the mark is missing."""
+        hi_lo = "h" if side < 0 else "l"
+        if self.use_mark:
+            ext = a[f"m{hi_lo}_{key}"][i]
+            if np.isfinite(ext):
+                return ext
+            self.n["mark_fallbacks"] += 1
+        return a[f"{hi_lo}_{key}"][i]
+
     def _bar_end(self, coin: str, i: int):
         st, a = self.st[coin], self.a[coin]
         pos = st.pos
@@ -430,7 +481,7 @@ class Engine:
         if pos is not None and pos.state == "open":
             hit = False
             for leg, key in ((pos.hl, "hl"), (pos.bn, "bn")):
-                ext = a[f"h_{key}"][i] if leg.side < 0 else a[f"l_{key}"][i]
+                ext = self._adverse(a, key, leg.side, i) if leg.alive else np.nan
                 mm = self.mm[leg.venue][coin]
                 if leg.alive and np.isfinite(ext) and leg.equity(pos.qty, ext) <= mm * pos.qty * ext:
                     self._liquidate(pos, leg, mm)
@@ -475,7 +526,9 @@ class Engine:
         eq = {"hl": pos.hl.equity(pos.qty, c_hl), "bn": pos.bn.equity(pos.qty, c_bn)}
         for low, high in (("hl", "bn"), ("bn", "hl")):
             leg_low, leg_high = getattr(pos, low), getattr(pos, high)
-            if eq[low] < self.trigger * leg_low.margin0:
+            price = c_hl if low == "hl" else c_bn
+            base = (pos.qty * price / self.lev) if self.trigger_on_current else leg_low.margin0
+            if eq[low] < self.trigger * base:
                 x = (eq[high] - eq[low]) / 2
                 if x <= self.wfee:
                     self.n["rebalance_no_surplus"] += 1
@@ -579,29 +632,57 @@ def random_schedule(inputs: dict[str, pd.DataFrame], trades: pd.DataFrame,
 
 # --- CLI -----------------------------------------------------------------------------------
 
+PREFIX = {"as_specified": "backtest_", "corrected": "backtest_corrected_"}
+
+
+def write_comparison(out) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Side-by-side tables of the as-specified and corrected runs from their saved CSVs."""
+    runs = ["strategy", "zero_cost", "always_on"]
+    summ, dec = {}, {}
+    for variant, prefix in PREFIX.items():
+        s = pd.read_csv(out / f"{prefix}summary.csv", index_col=0)
+        d = pd.read_csv(out / f"{prefix}decomposition_benchmarks.csv", index_col=0)
+        for r in s.columns:
+            summ[(variant, r)] = s[r]
+        for r in runs:
+            dec[(variant, r)] = d[r]
+    summ, dec = pd.DataFrame(summ), pd.DataFrame(dec)
+    summ.to_csv(out / "backtest_comparison_summary.csv")
+    dec.to_csv(out / "backtest_comparison_decomposition.csv")
+    return summ, dec
+
+
 def main(argv: list[str] | None = None) -> None:
     from src.backtest import metrics
 
     p = argparse.ArgumentParser()
     p.add_argument("--period", default="design", choices=["design"],
                    help="only the design period is allowed before Phase 5 (CLAUDE.md rule 3)")
+    p.add_argument("--variant", default="corrected", choices=sorted(VARIANTS),
+                   help="model variant (DECISIONS.md 2026-11-08); outputs are prefixed per variant")
     p.add_argument("--seeds", type=int, default=None, help="random-entry seeds (default: config)")
+    p.add_argument("--force", action="store_true",
+                   help="allow overwriting the saved as-specified tables")
     args = p.parse_args(argv)
-    cfg = load_config()
-    inputs = load_inputs(cfg, period=args.period)
     out = ROOT / "report" / "tables"
     out.mkdir(parents=True, exist_ok=True)
+    prefix = PREFIX[args.variant]
+    if args.variant == "as_specified" and (out / f"{prefix}summary.csv").exists() and not args.force:
+        raise SystemExit("as-specified tables exist and are kept as the record; use --force")
+    cfg = variant_cfg(load_config(), args.variant)
+    inputs = load_inputs(cfg, period=args.period)
 
     base = run(cfg, inputs)
     zc = run(zero_cost(cfg), inputs)
     side = 1 if cfg["benchmarks"]["always_on_direction"] == "short_hl" else -1
     always = run(cfg, inputs, AlwaysOnPolicy(side))
     seeds = args.seeds if args.seeds is not None else cfg["benchmarks"]["random_entry_seeds"]
-    rand = []
+    rand, rand_dec = [], []
     for seed in range(seeds):
         sched = random_schedule(inputs, base.trades, np.random.default_rng(seed))
         r = run(cfg, inputs, SchedulePolicy(sched))
         rand.append(metrics.summary(r).rename(seed))
+        rand_dec.append(metrics.decomposition(r.trades).loc["ALL"].rename(seed))
     rand = pd.DataFrame(rand)
 
     summary = pd.DataFrame({"strategy": metrics.summary(base), "zero_cost": metrics.summary(zc),
@@ -610,19 +691,24 @@ def main(argv: list[str] | None = None) -> None:
         summary["random_mean"] = rand.mean()
         summary["random_p05"] = rand.quantile(0.05)
         summary["random_p95"] = rand.quantile(0.95)
-    base.trades.to_csv(out / "backtest_trades.csv", index=False)
-    base.daily.to_csv(out / "backtest_daily.csv", index=False)
-    summary.to_csv(out / "backtest_summary.csv")
-    metrics.decomposition(base.trades).to_csv(out / "backtest_decomposition.csv")
-    pd.DataFrame({"strategy": metrics.decomposition(base.trades).loc["ALL"],
-                  "zero_cost": metrics.decomposition(zc.trades).loc["ALL"],
-                  "always_on": metrics.decomposition(always.trades).loc["ALL"]}
-                 ).to_csv(out / "backtest_decomposition_benchmarks.csv")
-    rand.to_csv(out / "backtest_random_entry.csv", index_label="seed")
+    base.trades.to_csv(out / f"{prefix}trades.csv", index=False)
+    base.daily.to_csv(out / f"{prefix}daily.csv", index=False)
+    summary.to_csv(out / f"{prefix}summary.csv")
+    metrics.decomposition(base.trades).to_csv(out / f"{prefix}decomposition.csv")
+    dec = pd.DataFrame({"strategy": metrics.decomposition(base.trades).loc["ALL"],
+                        "zero_cost": metrics.decomposition(zc.trades).loc["ALL"],
+                        "always_on": metrics.decomposition(always.trades).loc["ALL"]})
+    if rand_dec:
+        dec["random_mean"] = pd.DataFrame(rand_dec).mean()
+    dec.to_csv(out / f"{prefix}decomposition_benchmarks.csv")
+    rand.to_csv(out / f"{prefix}random_entry.csv", index_label="seed")
 
     for name, r in (("strategy", base), ("zero_cost", zc), ("always_on", always)):
         print(name, metrics.sanity(r, inputs))
     print(summary.round(4).to_string())
+    if all((out / f"{pre}summary.csv").exists() for pre in PREFIX.values()):
+        summ, dec = write_comparison(out)
+        print(dec.round(0).to_string())
 
 
 if __name__ == "__main__":

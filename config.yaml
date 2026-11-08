@@ -93,7 +93,11 @@ margin:
                   AVAX: 0.005, TAO: 0.01, BNB: 0.005}
   capital_buffer_frac: 0.5         # idle cash = 50% of initial margin on both venues
   forced_close_penalty_bps: 100    # liquidated leg closes 100 bps worse than its liquidation price
-  rebalance_trigger_frac: 0.5      # move collateral when a leg's margin < 50% of its initial margin
+  rebalance_trigger_frac: 0.5      # move collateral when a leg's margin < 50% of the trigger base
+  # Model-fidelity corrections (DECISIONS.md 2026-11-08); the as-specified run used
+  # last_trade / initial_margin.
+  liquidation_price_source: mark   # mark: Binance mark klines (BN leg), Binance index klines (HL)
+  rebalance_trigger_base: current_requirement   # qty x current price / leverage
   withdrawal_fee_usd: 1.0
   transfer_delay_hours: 2
   # Returns are reported on total capital: initial margin on both venues plus the buffer.
