@@ -74,15 +74,17 @@ execution:
   hyperliquid_leg: taker
   binance_leg: taker
 
-# --- Margin and capital (Phase 4; not decided yet) ---------------------------------
+# --- Margin and capital (Phase 4; DECISIONS.md 2026-11-08; null = not decided yet) ----
 margin:
-  leverage_per_leg: null
+  leverage_per_leg: 3
   maintenance_margin_frac: null
   capital_buffer_frac: null
   forced_close_penalty_bps: null
-  rebalance_trigger_frac: null
-  withdrawal_fee_usd: null
-  transfer_delay_hours: null
+  rebalance_trigger_frac: 0.5      # move collateral when a leg's margin < 50% of its initial margin
+  withdrawal_fee_usd: 1.0
+  transfer_delay_hours: 2
+  # Returns are reported on total capital: initial margin on both venues plus the buffer.
+  return_base: total_capital
 
 # --- Strategy (decided in writing after Phase 3, prompt 2.4) -----------------------
 # Baseline signal (DECISIONS.md, 2026-11-04; replaces the plan's 20% APR / 3-hour rule):
@@ -92,18 +94,22 @@ margin:
 strategy:
   signal: trailing_mean_known_gap
   signal_window_days: 7
-  robustness_window_days: [14, 30]   # robustness checks only; never used to re-pick parameters
+  # Robustness grid (DECISIONS.md 2026-11-08): checks only, never used to re-pick parameters.
+  robustness:
+    theta_in_apr: [0.05, 0.075, 0.10, 0.15, 0.20]
+    theta_out_apr: [0.0, 0.015, 0.03, 0.05]
+    signal_window_days: [7, 14, 30]
   regime_filters: []                 # none in the baseline
   theta_in_apr: 0.10
   confirm_hours: 0         # no k-hour confirmation; the 7-day mean replaces it
   theta_out_apr: 0.03
   exit_on_sign_change: true
   direction: short_higher_funding    # short the venue with higher funding, long the other
-  max_hold_hours: null
-  spread_stop_frac: null
-  notional_per_position_usd: null
-  max_concurrent_positions: null
-  max_positions_per_coin: null
+  max_hold_hours: .inf               # no maximum holding period; the exit rule closes positions
+  spread_stop_frac: 0.01             # close if ln(p_hl/p_bn) moves 100 bps against from entry
+  notional_per_position_usd: 10000   # per leg; same coin quantity on both legs
+  max_concurrent_positions: 15
+  max_positions_per_coin: 1
 
 # --- Cleaning (DECISIONS.md, 2026-11-04) -------------------------------------------
 cleaning:
