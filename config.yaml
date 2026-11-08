@@ -136,6 +136,24 @@ benchmarks:
   random_entry_seeds: 200
   always_on_direction: short_hl    # short Hyperliquid / long Binance in every coin
 
+# --- Robustness (docs/plan.md Phase 5 items 2-6; DECISIONS.md 2026-11-08) -----------------
+# Design period, corrected model. Checks only: never used to change the baseline parameters.
+# The entry/exit/window grid is strategy.robustness.
+robustness:
+  cost_multiples: [0.5, 1.0, 2.0, 3.0]   # fees and slippage, jointly and as a fee x slippage grid
+  breakeven_tol: 0.005                   # bisection tolerance on the joint cost multiple
+  maker_scenario:                        # reported separately; maker fills are not guaranteed
+    hyperliquid_leg: maker
+    binance_leg: maker
+    slippage_multiple: 0.5
+  majors: [BTC, ETH, SOL]                # universe split (slippage.majors is a separate list)
+  rolling_sharpe_days: 90
+  bootstrap: {block_days: 7, resamples: 10000, seed: 0, ci: 0.95}
+  # Sensitivities added after the first backtest run (not pre-registered); labelled in tables.
+  post_hoc:
+    leverage_per_leg: [1.5, 2, 3]
+    capital_buffer_frac: [0.0, 0.25, 0.5]
+
 # --- Cleaning (DECISIONS.md, 2026-11-04) -------------------------------------------
 cleaning:
   off_hour_tolerance_min: 5         # funding stamps further than this from the hour are flagged

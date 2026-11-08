@@ -1,0 +1,8 @@
+,0
+sharpe,-0.6053670123807902
+ci_low,-1.8808082872447036
+ci_high,0.8409712056818404
+share_above_zero,0.1982
+days,699.0
+block_days,7.0
+resamples,10000.0
