@@ -38,15 +38,17 @@ import argparse
 import copy
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from src.analysis.gap_stats import APR
 from src.backtest import costs
-from src.clean.align import _closed, _load
+from src.clean.align import _closed, _load, panel_path, period_args
 from src.clean.normalise import HOUR
-from src.config import ROOT, load_config, period_ms
+from src.config import (ROOT, check_period_allowed, load_config, period_bounds, period_ms,
+                        report_dir, warmup_start_ms)
 
 DAY = 24 * HOUR
 COMPONENTS = ["hl_funding", "bn_funding", "price_spread", "fees", "slippage", "transfer_fees",
@@ -144,33 +146,44 @@ def coin_inputs(panel: pd.DataFrame, hl_1h: pd.DataFrame, hl_4h: pd.DataFrame,
     return d[INPUT_COLUMNS + MARK_COLUMNS]
 
 
-def load_inputs(cfg: dict, window_days: float | None = None,
-                period: str = "design") -> dict[str, pd.DataFrame]:
-    """Engine inputs for every universe coin, from data/clean/panel.parquet and raw candles.
+def load_inputs(cfg: dict, window_days: float | None = None, period: str | None = "design",
+                allow_holdout: bool = False, start: str | None = None,
+                end: str | None = None) -> dict[str, pd.DataFrame]:
+    """Engine inputs for every universe coin over a period (named in config.yaml, or explicit
+    inclusive dates), from the period's panel (`align.panel_path`) and raw candles.
 
-    Only the design period is available before Phase 5 (CLAUDE.md rule 3): raw files are cut at
-    the period end on load, and the panel itself is built for the design period only.
+    The signal is computed on the panel's warm-up rows before the period start and the inputs
+    are then cut to [start, end), so the engine starts flat at the period start with a warmed-up
+    signal built only from data before it. The panel must cover the warm-up (`window_days`
+    before the start, never before the sample start). Periods past the design cut-off need
+    allow_holdout=True (CLAUDE.md rule 3). Raw files are cut at the period end on load.
     """
-    if period != "design":
-        raise ValueError("only the design period is allowed before Phase 5 (CLAUDE.md rule 3)")
+    label, start_ms, end_ms = period_bounds(cfg, period, start, end)
+    check_period_allowed(cfg, end_ms, allow_holdout)
     window_days = window_days or cfg["strategy"]["signal_window_days"]
-    _, end_ms = period_ms(cfg, period)
-    panel = pd.read_parquet(ROOT / cfg["paths"]["clean"] / "panel.parquet")
-    panel = panel[panel["hour"] < end_ms]
+    first_ms = warmup_start_ms(cfg, start_ms, window_days)
+    panel = pd.read_parquet(panel_path(cfg, label))
+    panel = panel[(panel["hour"] >= first_ms) & (panel["hour"] < end_ms)]
+    if panel.empty or panel["hour"].min() > first_ms:
+        raise ValueError(f"panel for {label} does not cover the {window_days}-day signal warm-up; "
+                         "rebuild it with python -m src.clean.align for this period")
     raw = ROOT / cfg["paths"]["raw"]
     out = {}
     for coin in cfg["universe"]["coins"]:
         sym = cfg["symbols"][coin]
         hl = lambda ds: _load(raw / "hyperliquid" / ds / f"{coin}.parquet", "t", end_ms)
         bn = lambda ds: _load(raw / "binance" / ds / f"{coin}.parquet", "open_time", end_ms)
-        out[coin] = coin_inputs(panel[panel["coin"] == coin], hl("candles_1h"), hl("candles_4h"),
-                                bn("klines_1h"), sym["hl_unit"], sym["bn_unit"], window_days,
-                                bn_mark=bn("mark_price_1h"), bn_index=bn("index_price_1h"))
+        d = coin_inputs(panel[panel["coin"] == coin], hl("candles_1h"), hl("candles_4h"),
+                        bn("klines_1h"), sym["hl_unit"], sym["bn_unit"], window_days,
+                        bn_mark=bn("mark_price_1h"), bn_index=bn("index_price_1h"))
+        out[coin] = d[d["hour"] >= start_ms].reset_index(drop=True)
     return out
 
 
 def with_signal(inputs: dict[str, pd.DataFrame], window_days: float) -> dict[str, pd.DataFrame]:
-    """Copy of the inputs with the signal recomputed over another window (robustness)."""
+    """Copy of the inputs with the signal recomputed over another window (robustness). Uses only
+    the rows given, so there is no warm-up before their first row (fine for the design period,
+    which starts at the sample start; for another period use load_inputs(window_days=...))."""
     out = {}
     for coin, d in inputs.items():
         d = d.copy()
@@ -635,11 +648,18 @@ def random_schedule(inputs: dict[str, pd.DataFrame], trades: pd.DataFrame,
 PREFIX = {"as_specified": "backtest_", "corrected": "backtest_corrected_"}
 
 
-def write_comparison(out) -> tuple[pd.DataFrame, pd.DataFrame]:
+def out_prefix(label: str, variant: str) -> str:
+    """Output file prefix: the design period keeps the original names; any other period is
+    prefixed with its label, e.g. holdout_backtest_corrected_."""
+    return PREFIX[variant] if label == "design" else f"{label}_{PREFIX[variant]}"
+
+
+def write_comparison(out, label: str = "design") -> tuple[pd.DataFrame, pd.DataFrame]:
     """Side-by-side tables of the as-specified and corrected runs from their saved CSVs."""
     runs = ["strategy", "zero_cost", "always_on"]
     summ, dec = {}, {}
-    for variant, prefix in PREFIX.items():
+    for variant in PREFIX:
+        prefix = out_prefix(label, variant)
         s = pd.read_csv(out / f"{prefix}summary.csv", index_col=0)
         d = pd.read_csv(out / f"{prefix}decomposition_benchmarks.csv", index_col=0)
         for r in s.columns:
@@ -647,30 +667,35 @@ def write_comparison(out) -> tuple[pd.DataFrame, pd.DataFrame]:
         for r in runs:
             dec[(variant, r)] = d[r]
     summ, dec = pd.DataFrame(summ), pd.DataFrame(dec)
-    summ.to_csv(out / "backtest_comparison_summary.csv")
-    dec.to_csv(out / "backtest_comparison_decomposition.csv")
+    pre = "" if label == "design" else f"{label}_"
+    summ.to_csv(out / f"{pre}backtest_comparison_summary.csv")
+    dec.to_csv(out / f"{pre}backtest_comparison_decomposition.csv")
     return summ, dec
 
 
 def main(argv: list[str] | None = None) -> None:
     from src.backtest import metrics
 
-    p = argparse.ArgumentParser()
-    p.add_argument("--period", default="design", choices=["design"],
-                   help="only the design period is allowed before Phase 5 (CLAUDE.md rule 3)")
+    p = period_args(argparse.ArgumentParser())
+    p.add_argument("--out-dir", type=Path, default=None,
+                   help="output directory (default <paths.report>/tables)")
     p.add_argument("--variant", default="corrected", choices=sorted(VARIANTS),
                    help="model variant (DECISIONS.md 2026-11-08); outputs are prefixed per variant")
     p.add_argument("--seeds", type=int, default=None, help="random-entry seeds (default: config)")
     p.add_argument("--force", action="store_true",
                    help="allow overwriting the saved as-specified tables")
     args = p.parse_args(argv)
-    out = ROOT / "report" / "tables"
+    base_cfg = load_config(args.config) if args.config else load_config()
+    label, _, _ = period_bounds(base_cfg, args.period, args.start, args.end)
+    out = args.out_dir or report_dir(base_cfg) / "tables"
     out.mkdir(parents=True, exist_ok=True)
-    prefix = PREFIX[args.variant]
-    if args.variant == "as_specified" and (out / f"{prefix}summary.csv").exists() and not args.force:
+    prefix = out_prefix(label, args.variant)
+    if (label == "design" and args.variant == "as_specified"
+            and (out / f"{prefix}summary.csv").exists() and not args.force):
         raise SystemExit("as-specified tables exist and are kept as the record; use --force")
-    cfg = variant_cfg(load_config(), args.variant)
-    inputs = load_inputs(cfg, period=args.period)
+    cfg = variant_cfg(base_cfg, args.variant)
+    inputs = load_inputs(cfg, period=args.period, allow_holdout=args.allow_holdout,
+                         start=args.start, end=args.end)
 
     base = run(cfg, inputs)
     zc = run(zero_cost(cfg), inputs)
@@ -706,8 +731,8 @@ def main(argv: list[str] | None = None) -> None:
     for name, r in (("strategy", base), ("zero_cost", zc), ("always_on", always)):
         print(name, metrics.sanity(r, inputs))
     print(summary.round(4).to_string())
-    if all((out / f"{pre}summary.csv").exists() for pre in PREFIX.values()):
-        summ, dec = write_comparison(out)
+    if all((out / f"{out_prefix(label, v)}summary.csv").exists() for v in PREFIX):
+        summ, dec = write_comparison(out, label)
         print(dec.round(0).to_string())
 
 

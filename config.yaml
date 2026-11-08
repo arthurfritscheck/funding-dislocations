@@ -193,3 +193,4 @@ analysis:
 paths:
   raw: data/raw        # data/raw/<venue>/<dataset>/<coin>.parquet
   clean: data/clean
+  report: report       # tables/, figures/ and data_quality*.md

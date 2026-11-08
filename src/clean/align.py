@@ -24,7 +24,15 @@ Prices (per single coin unit, after dividing by the contract unit; unclosed cand
                  close at the same moment and the same rows.
   spread         ln(p_hl / p_bn).
 
-    .venv\\Scripts\\python.exe -m src.clean.align            # design period (rule 3)
+Periods: any period named in config.yaml (`--period`) or explicit inclusive dates (`--start`,
+`--end`). The panel also holds the signal warm-up, `strategy.signal_window_days` before the period
+start (never before the sample start, so the design panel has none): rows before the start come
+from earlier data and are used only to warm the signal up. Periods past the design cut-off need
+`--allow-holdout` (CLAUDE.md rule 3). The design panel is data/clean/panel.parquet, any other
+data/clean/panel_<label>.parquet; the report is report/data_quality[_<label>].md.
+
+    .venv\\Scripts\\python.exe -m src.clean.align                                   # design
+    .venv\\Scripts\\python.exe -m src.clean.align --period holdout --allow-holdout   # Phase 5 only
 """
 
 from __future__ import annotations
@@ -36,7 +44,8 @@ import numpy as np
 import pandas as pd
 
 from src.clean.normalise import HOUR, binance_intervals, round_to_hour
-from src.config import ROOT, load_config, period_ms
+from src.config import (ROOT, check_period_allowed, load_config, output_suffix, period_bounds,
+                        report_dir, warmup_start_ms)
 
 PANEL_COLUMNS = ["coin", "hour", "f_hl_realised", "f_bn_realised", "f_hl_known", "f_bn_known",
                  "bn_interval_h", "bn_settle", "gap", "p_hl", "p_bn", "spread", "flags"]
@@ -209,9 +218,22 @@ def _load(path: Path, key: str, end_ms: int) -> pd.DataFrame:
     return df[df[key].astype("int64") < end_ms].reset_index(drop=True)
 
 
-def build_panel(cfg: dict | None = None, period: str = "design") -> pd.DataFrame:
+def panel_path(cfg: dict, label: str) -> Path:
+    return ROOT / cfg["paths"]["clean"] / f"panel{output_suffix(label)}.parquet"
+
+
+def build_panel(cfg: dict | None = None, period: str | None = "design", allow_holdout: bool = False,
+                start: str | None = None, end: str | None = None,
+                warmup_days: float | None = None) -> pd.DataFrame:
+    """Hourly panel for a period (named in config.yaml, or explicit dates), starting
+    `warmup_days` (default `strategy.signal_window_days`) before it for the signal warm-up.
+    Raw data at or after the period end is dropped on load."""
     cfg = cfg or load_config()
-    start_ms, end_ms = period_ms(cfg, period)
+    _, start_ms, end_ms = period_bounds(cfg, period, start, end)
+    check_period_allowed(cfg, end_ms, allow_holdout)
+    if warmup_days is None:
+        warmup_days = cfg["strategy"]["signal_window_days"]
+    start_ms = warmup_start_ms(cfg, start_ms, warmup_days)
     raw = ROOT / cfg["paths"]["raw"]
     snaps = sorted((raw / "binance" / "funding_info").glob("*.parquet"))
     caps = pd.read_parquet(snaps[-1]) if snaps else None
@@ -226,20 +248,32 @@ def build_panel(cfg: dict | None = None, period: str = "design") -> pd.DataFrame
     return pd.concat(parts, ignore_index=True)
 
 
+def period_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Shared CLI flags for choosing the config file and the period."""
+    p.add_argument("--config", type=Path, default=None, help="config file (default config.yaml)")
+    p.add_argument("--period", default="design", help="period name in config.yaml")
+    p.add_argument("--start", help="ISO start date (inclusive); with --end, overrides --period")
+    p.add_argument("--end", help="ISO end date (inclusive)")
+    p.add_argument("--allow-holdout", action="store_true",
+                   help="allow periods past the design cut-off (Phase 5 only, CLAUDE.md rule 3)")
+    return p
+
+
 def main(argv: list[str] | None = None) -> None:
     from src.clean import checks
 
-    p = argparse.ArgumentParser()
-    p.add_argument("--period", default="design", choices=["design"],
-                   help="only the design period is allowed before Phase 5 (CLAUDE.md rule 3)")
-    args = p.parse_args(argv)
-    cfg = load_config()
-    panel = build_panel(cfg, args.period)
-    out = ROOT / cfg["paths"]["clean"] / "panel.parquet"
+    args = period_args(argparse.ArgumentParser()).parse_args(argv)
+    cfg = load_config(args.config) if args.config else load_config()
+    label, start_ms, end_ms = period_bounds(cfg, args.period, args.start, args.end)
+    panel = build_panel(cfg, args.period, args.allow_holdout, args.start, args.end)
+    out = panel_path(cfg, label)
     out.parent.mkdir(parents=True, exist_ok=True)
     panel.to_parquet(out, index=False)
-    report = checks.write_report(panel, cfg, args.period, ROOT / "report" / "data_quality.md")
-    print(f"panel: {len(panel):,} rows -> {out.relative_to(ROOT)}; report -> {report.relative_to(ROOT)}")
+    in_period = panel[panel["hour"] >= start_ms].reset_index(drop=True)   # report without warm-up
+    report = checks.write_report(in_period, cfg, label,
+                                 report_dir(cfg) / f"data_quality{output_suffix(label)}.md",
+                                 start_ms=start_ms, end_ms=end_ms)
+    print(f"panel: {len(panel):,} rows (incl. warm-up) -> {out}; report -> {report}")
 
 
 if __name__ == "__main__":
