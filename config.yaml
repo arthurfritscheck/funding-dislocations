@@ -77,9 +77,22 @@ execution:
 # --- Margin and capital (Phase 4; DECISIONS.md 2026-11-08; null = not decided yet) ----
 margin:
   leverage_per_leg: 3
-  maintenance_margin_frac: null
-  capital_buffer_frac: null
-  forced_close_penalty_bps: null
+  # Maintenance margin as a fraction of leg notional, per venue and coin, assumed constant over
+  # the sample (snapshots 2026-11-08; LIMITATIONS.md).
+  #   hyperliquid: half the initial margin at the coin's max leverage, 1 / (2 * maxLeverage), first
+  #     margin tier (data/raw/hyperliquid/meta_snapshot/meta.json).
+  #   binance: effective rate at a $10,000 notional, (10000 * rate - cum) / 10000, from Binance's
+  #     public bracket table (data/raw/binance/leverage_brackets/brackets.json). $10k is above the
+  #     first bracket for WIFUSDT (cap $5k) and 1000BONKUSDT (cap $7.5k).
+  maintenance_margin_frac:
+    hyperliquid: {BTC: 0.0125, ETH: 0.02, SOL: 0.025, kPEPE: 0.05, SUI: 0.05, WIF: 0.10,
+                  TIA: 0.10, DOGE: 0.05, WLD: 0.05, AAVE: 0.05, APT: 0.05, kBONK: 0.05,
+                  AVAX: 0.05, TAO: 0.10, BNB: 0.05}
+    binance:     {BTC: 0.004, ETH: 0.004, SOL: 0.005, kPEPE: 0.0065, SUI: 0.01, WIF: 0.0125,
+                  TIA: 0.01, DOGE: 0.0065, WLD: 0.01, AAVE: 0.01, APT: 0.01, kBONK: 0.01125,
+                  AVAX: 0.005, TAO: 0.01, BNB: 0.005}
+  capital_buffer_frac: 0.5         # idle cash = 50% of initial margin on both venues
+  forced_close_penalty_bps: 100    # liquidated leg closes 100 bps worse than its liquidation price
   rebalance_trigger_frac: 0.5      # move collateral when a leg's margin < 50% of its initial margin
   withdrawal_fee_usd: 1.0
   transfer_delay_hours: 2
@@ -110,6 +123,14 @@ strategy:
   notional_per_position_usd: 10000   # per leg; same coin quantity on both legs
   max_concurrent_positions: 15
   max_positions_per_coin: 1
+  # After a spread stop or forced close, no re-entry in that coin until the signal has first met
+  # the exit rule (|signal| < theta_out_apr or a sign change). DECISIONS.md 2026-11-08.
+  rearm_after_stop: exit_rule
+
+# --- Benchmarks (docs/plan.md Phase 4 item 7) -------------------------------------------
+benchmarks:
+  random_entry_seeds: 200
+  always_on_direction: short_hl    # short Hyperliquid / long Binance in every coin
 
 # --- Cleaning (DECISIONS.md, 2026-11-04) -------------------------------------------
 cleaning:

@@ -228,14 +228,7 @@ def km_survival_at(km: pd.DataFrame, t: float) -> float:
     return float(km.loc[km["t"] <= t, "survival"].iloc[-1])
 
 
-def round_trip_cost_bps(cfg: dict, coin: str) -> float:
-    """Fees + slippage for one round trip: open and close both legs (four fills), in bps of
-    one leg's notional, using the execution legs, fees and slippage in config.yaml."""
-    fees, slip, ex = cfg["fees"], cfg["slippage"], cfg["execution"]
-    hl = fees["hyperliquid"][f"{ex['hyperliquid_leg']}_bps"]
-    bn = fees["binance"][f"{ex['binance_leg']}_bps"]
-    s = slip["majors_bps"] if coin in slip["majors"] else slip["others_bps"]
-    return 2 * (hl + s) + 2 * (bn + s)
+from src.backtest.costs import round_trip_cost_bps  # noqa: E402,F401  (moved; re-exported)
 
 
 def carry_breakeven(eps: pd.DataFrame, cfg: dict) -> pd.DataFrame:

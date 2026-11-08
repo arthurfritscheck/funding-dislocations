@@ -1,0 +1,10 @@
+component,expected_usd,hand_working
+qty,100.0,"10,000 / mean(100, 100)"
+hl_funding,12.12,"short HL receives f_hl x q x ref_px for hours 4-15: 6 x 0.0001 x 100 x 100 + 6 x 0.0001 x 100 x 102 = 6.00 + 6.12"
+bn_funding,-4.048,"long BN pays f_bn x 8 x q x ref_px at settlements 8h and 16h (24h is after exit): 0.00002 x 8 x 100 x 100 + 0.00003 x 8 x 100 x 102 = 1.600 + 2.448"
+price_spread,50.0,"q x [(101.5 - 100) - (101 - 100)] = 100 x 0.5"
+fees,-19.12,"HL 4.5 bps: 10,000 x 0.00045 + 10,100 x 0.00045 = 4.500 + 4.545; BN 5.0 bps: 10,000 x 0.0005 + 10,150 x 0.0005 = 5.000 + 5.075"
+slippage,-8.05,"2 bps per fill: 10,000 x 0.0002 x 2 + 10,100 x 0.0002 + 10,150 x 0.0002 = 4.00 + 2.02 + 2.03"
+transfer_fees,0.0,no rebalance (prices flat at 100 on the bar closes)
+liquidation,0.0,no liquidation
+total,30.902,12.12 - 4.048 + 50 - 19.12 - 8.05
