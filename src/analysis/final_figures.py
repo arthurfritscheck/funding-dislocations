@@ -40,6 +40,7 @@ SURFACE, INK, INK_2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e6e5e1"
 BLUE, ORANGE, GREEN, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
 GAIN, LOSS = "#2a78d6", "#e34948"
 WIDTH, DPI = 9.0, 200
+HALF = WIDTH / 2          # figures 1 and 2 sit side by side in the report
 RC = {"font.family": "DejaVu Sans", "font.size": 8.5, "axes.labelsize": 8.5,
       "axes.labelcolor": INK_2, "xtick.labelsize": 8, "ytick.labelsize": 8,
       "legend.fontsize": 8, "figure.facecolor": SURFACE, "savefig.facecolor": SURFACE,
@@ -143,8 +144,9 @@ def finish(fig, name: str, title: str, subtitle: str | None, note: str | None,
     """Shared frame: bold title and grey subtitle top left, optional figure legend row, caption
     and source files bottom left. Saves report/figures/final/<name>.png."""
     h = fig.get_figheight()
-    cap = textwrap.wrap(note, 150) if note else []
-    cap += textwrap.wrap("Source: " + ", ".join(f"report/tables/{s}.csv" for s in sources), 150,
+    n = int(round(150 * fig.get_figwidth() / WIDTH))   # caption characters per line
+    cap = textwrap.wrap(note, n) if note else []
+    cap += textwrap.wrap("Source: " + ", ".join(f"report/tables/{s}.csv" for s in sources), n,
                          subsequent_indent="    ")
     sub = subtitle.split("\n") if subtitle else []
     top_in = 0.44 + 0.2 * len(sub)
@@ -177,7 +179,7 @@ def fig1_gap_over_time(coins=("BTC", "WLD")) -> Path:
     summ = table("eda_gap_summary", index_col="coin")
     x = to_time(g.index)
     first, last = x[0].strftime("%Y-%m-%d"), x[-1].strftime("%Y-%m-%d")
-    fig, axes = plt.subplots(len(coins), 1, figsize=(WIDTH, 5.8), sharex=True, sharey=True)
+    fig, axes = plt.subplots(len(coins), 1, figsize=(HALF, 6.4), sharex=True, sharey=True)
     for ax, coin in zip(axes, coins):
         style(ax)
         zero_line(ax)
@@ -191,8 +193,8 @@ def fig1_gap_over_time(coins=("BTC", "WLD")) -> Path:
     axes[-1].margins(x=0.005)
     return finish(fig, "01_gap_over_time",
                   "Funding gap over time: BTC and WLD",
-                  f"Hyperliquid minus Binance funding, % APR, averaged per UTC day; design period "
-                  f"{first} to {last}",
+                  "Hyperliquid minus Binance funding, % APR, per UTC day;\n"
+                  f"design period {first} to {last}",
                   "Known-at-t hourly gap (a funding row counts only from one hour after its stamp). "
                   "Positive: Hyperliquid funding is higher, so short Hyperliquid / long Binance "
                   "collects it. Dashed: mean hourly gap over the period. WLD is the mid-cap example "
@@ -206,7 +208,7 @@ def fig2_half_lives() -> Path:
     hl = table("persistence_half_lives", index_col="coin").sort_values("half_life_days",
                                                                        ascending=False)
     y = np.arange(len(hl))
-    fig, ax = plt.subplots(figsize=(WIDTH, 5.6))
+    fig, ax = plt.subplots(figsize=(HALF, 6.4))
     style(ax, grid="x")
     ax.hlines(y, hl["hl_lo_hac"], hl["hl_hi_hac"], color=BLUE, linewidth=2.2,
               capstyle="round")
@@ -221,8 +223,8 @@ def fig2_half_lives() -> Path:
     n_days = int(hl["n_days"].iloc[0])
     return finish(fig, "02_half_lives",
                   "Half-life of the funding gap by coin",
-                  "AR(1) on daily mean gaps: point estimate (dot, value at right) with 95% "
-                  "Newey-West interval",
+                  "AR(1) on daily mean gaps: estimate (dot, value at right)\n"
+                  "with 95% Newey-West interval",
                   f"Design period, {n_days} daily observations per coin. Intervals use Newey-West "
                   "(HAC) standard errors on the AR(1) coefficient, mapped to half-lives; OLS "
                   "intervals (se in the source table) are narrower than these (se_hac). "
@@ -429,49 +431,9 @@ def fig6_cost_sensitivity() -> Path:
                   ["robustness_cost_joint", "robustness_breakeven"])
 
 
-# --- 7. Leverage with and without the tail days (post hoc) -------------------------------------
+# --- 7. Failure case: TAO -------------------------------------------------------------------------
 
-def fig7_leverage_tail() -> Path:
-    t = table("robustness_tail_event_post_hoc").sort_values("leverage_per_leg")
-    label = t["label"].iloc[0]
-    days = short_days(t["tail_days"].iloc[0])
-    x = np.arange(len(t))
-    w = 0.36
-    fig, ax = plt.subplots(figsize=(WIDTH, 4.4))
-    style(ax)
-    zero_line(ax)
-    series = [("total_pnl", "All days", BLUE, -1), ("pnl_excl_tail_days", f"Excluding {days}",
-                                                     ORANGE, 1)]
-    for col, name, c, side in series:
-        xs = x + side * (w / 2 + 0.01)
-        ax.bar(xs, t[col], w, color=c, label=name, edgecolor=SURFACE, linewidth=1)
-        for xi, v in zip(xs, t[col]):
-            ax.annotate(usd(v), (xi, v), xytext=(0, 3 if v >= 0 else -3),
-                        textcoords="offset points", ha="center",
-                        va="bottom" if v >= 0 else "top", fontsize=8, color=INK)
-    ax.set_xticks(x, [f"{lev:g}x per leg" + (" (baseline)" if lev == 3 else "")
-                      + f"\n${cap:,.0f} capital"
-                      for lev, cap in zip(t["leverage_per_leg"], t["capital"])])
-    lo, hi = min(t["total_pnl"].min(), t["pnl_excl_tail_days"].min(), 0), \
-        max(t["total_pnl"].max(), t["pnl_excl_tail_days"].max(), 0)
-    ax.set_ylim(lo - 0.12 * (hi - lo), hi + 0.12 * (hi - lo))
-    dollars(ax)
-    ax.set_ylabel("Net P&L, design period, $")
-    ax.legend(frameon=False, loc="lower right", labelcolor=INK)
-    return finish(fig, "07_leverage_tail_post_hoc",
-                  f"Net P&L by leverage, with and without {days} (post hoc)",
-                  f"{label[0].upper() + label[1:]}: not pre-registered and not used to choose any "
-                  "parameter",
-                  f"Excluding removes the daily P&L booked on {days} (UTC) only; it is not a rerun "
-                  "without those days, so positions liquidated then stay closed. Capital includes the "
-                  "same idle buffer at every leverage; the buffer changes only the capital base, not "
-                  "P&L. Design period, corrected model.",
-                  ["robustness_tail_event_post_hoc"])
-
-
-# --- 8. Failure case: TAO -------------------------------------------------------------------------
-
-def fig8_failure_case(coin: str = "TAO") -> Path:
+def fig7_failure_case(coin: str = "TAO") -> Path:
     worst = table("failure_cases_worst_trades")
     wt = worst[worst["coin"] == coin]
     if len(wt) != 1:
@@ -571,7 +533,7 @@ def fig8_failure_case(coin: str = "TAO") -> Path:
     ax.margins(x=0.01)
     side = w["position"].replace("HL", "Hyperliquid").replace("BN", "Binance")
     leg = str(w["liquidated_leg"]).capitalize()
-    return finish(fig, f"08_failure_case_{coin}",
+    return finish(fig, f"07_failure_case_{coin}",
                   f"Failure case: {coin}, {side}, {leg} leg liquidated on {liq_day}",
                   f"Entry {entry:%Y-%m-%d %H:%M}, exit {exit_:%Y-%m-%d %H:%M} UTC "
                   f"({w['hold_days']:.1f} days). Total {money(w['total'])}, by component:\n"
@@ -588,9 +550,49 @@ def fig8_failure_case(coin: str = "TAO") -> Path:
                   ["failure_cases_worst_trades", "failure_cases_paths", "backtest_corrected_trades"])
 
 
+# --- 8. Leverage with and without the tail days (post hoc) -------------------------------------
+
+def fig8_leverage_tail() -> Path:
+    t = table("robustness_tail_event_post_hoc").sort_values("leverage_per_leg")
+    label = t["label"].iloc[0]
+    days = short_days(t["tail_days"].iloc[0])
+    x = np.arange(len(t))
+    w = 0.36
+    fig, ax = plt.subplots(figsize=(WIDTH, 4.4))
+    style(ax)
+    zero_line(ax)
+    series = [("total_pnl", "All days", BLUE, -1), ("pnl_excl_tail_days", f"Excluding {days}",
+                                                     ORANGE, 1)]
+    for col, name, c, side in series:
+        xs = x + side * (w / 2 + 0.01)
+        ax.bar(xs, t[col], w, color=c, label=name, edgecolor=SURFACE, linewidth=1)
+        for xi, v in zip(xs, t[col]):
+            ax.annotate(usd(v), (xi, v), xytext=(0, 3 if v >= 0 else -3),
+                        textcoords="offset points", ha="center",
+                        va="bottom" if v >= 0 else "top", fontsize=8, color=INK)
+    ax.set_xticks(x, [f"{lev:g}x per leg" + (" (baseline)" if lev == 3 else "")
+                      + f"\n${cap:,.0f} capital"
+                      for lev, cap in zip(t["leverage_per_leg"], t["capital"])])
+    lo, hi = min(t["total_pnl"].min(), t["pnl_excl_tail_days"].min(), 0), \
+        max(t["total_pnl"].max(), t["pnl_excl_tail_days"].max(), 0)
+    ax.set_ylim(lo - 0.12 * (hi - lo), hi + 0.12 * (hi - lo))
+    dollars(ax)
+    ax.set_ylabel("Net P&L, design period, $")
+    ax.legend(frameon=False, loc="lower right", labelcolor=INK)
+    return finish(fig, "08_leverage_tail_post_hoc",
+                  f"Net P&L by leverage, with and without {days} (post hoc)",
+                  f"{label[0].upper() + label[1:]}: not pre-registered and not used to choose any "
+                  "parameter",
+                  f"Excluding removes the daily P&L booked on {days} (UTC) only; it is not a rerun "
+                  "without those days, so positions liquidated then stay closed. Capital includes the "
+                  "same idle buffer at every leverage; the buffer changes only the capital base, not "
+                  "P&L. Design period, corrected model.",
+                  ["robustness_tail_event_post_hoc"])
+
+
 FIGURES = {1: fig1_gap_over_time, 2: fig2_half_lives, 3: fig3_episodes_vs_breakeven,
            4: fig4_waterfall, 5: fig5_cumulative, 6: fig6_cost_sensitivity,
-           7: fig7_leverage_tail, 8: fig8_failure_case}
+           7: fig7_failure_case, 8: fig8_leverage_tail}
 
 
 def main(argv: list[str] | None = None) -> list[Path]:

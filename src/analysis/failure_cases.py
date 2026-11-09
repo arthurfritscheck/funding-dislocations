@@ -27,7 +27,7 @@ from src.analysis.backtest_figures import PALETTE  # noqa: E402
 from src.analysis.gap_stats import APR, FIGURES, INK, INK_2, SURFACE, _style  # noqa: E402
 from src.backtest import engine as E  # noqa: E402
 from src.clean.align import _closed, _load  # noqa: E402
-from src.config import ROOT, period_ms  # noqa: E402
+from src.config import ROOT, check_period_allowed, period_ms  # noqa: E402
 
 HOUR = E.HOUR
 YELLOW = "#eda100"   # slot 4 of the categorical palette
@@ -57,10 +57,13 @@ def liquidated_leg(trade, d: pd.DataFrame) -> str:
     return "both" if hl_hit and bn_hit else "hyperliquid" if hl_hit else "binance"
 
 
-def load_marks(cfg: dict, coin: str) -> pd.DataFrame:
+def load_marks(cfg: dict, coin: str, period: str = "design",
+               allow_holdout: bool = False) -> pd.DataFrame:
     """Binance 1h mark- and index-price klines for one coin, by kline open hour, unit-scaled,
-    cut at the design-period end (CLAUDE.md rule 3)."""
-    _, end_ms = period_ms(cfg, "design")
+    cut at the period end (default the design period; a later period needs allow_holdout=True,
+    CLAUDE.md rule 3)."""
+    _, end_ms = period_ms(cfg, period)
+    check_period_allowed(cfg, end_ms, allow_holdout)
     raw, unit = ROOT / cfg["paths"]["raw"] / "binance", cfg["symbols"][coin]["bn_unit"]
     out = None
     for ds, name in (("mark_price_1h", "bn_mark"), ("index_price_1h", "bn_index")):

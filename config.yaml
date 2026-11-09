@@ -156,6 +156,9 @@ robustness:
     capital_buffer_frac: [0.0, 0.25, 0.5]
     tail_event_days: ["2025-10-10", "2025-10-11"]   # UTC days excluded in the tail-event table
   failure_cases: {n_worst: 5, pad_days: 3}   # worst trades and days shown around each
+  # Held-out stress window reported separately (the Binance hack; DECISIONS.md 2026-11-08, held-out
+  # run entry). UTC days; report_checks splits the held-out daily P&L on them (not a rerun).
+  holdout_stress_days: ["2026-10-29", "2026-10-30", "2026-10-31"]
 
 # --- Cleaning (DECISIONS.md, 2026-11-04) -------------------------------------------
 cleaning:
