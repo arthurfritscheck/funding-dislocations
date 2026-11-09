@@ -338,6 +338,21 @@ class Result:
     capital: float
 
 
+def binance_transferable(wallet: float, upnl: float, initial_margin: float) -> float:
+    """Most a Binance leg can transfer out (post-hoc transfer cap, DECISIONS.md 2026-11-09): no
+    more than its wallet balance, which excludes unrealised P&L, and no more than its available
+    margin, wallet + unrealised P&L - initial margin at the current price. Never negative."""
+    return max(0.0, min(wallet, wallet + upnl - initial_margin))
+
+
+def hyperliquid_transferable(equity: float, notional: float, leverage: float,
+                             min_frac: float) -> float:
+    """Most a Hyperliquid leg can transfer out (post-hoc transfer cap): unrealised P&L included,
+    but the remaining margin must stay at least max(initial margin at `leverage`, min_frac x
+    position value), Hyperliquid's transfer_margin_required. Never negative."""
+    return max(0.0, equity - max(notional / leverage, min_frac * notional))
+
+
 def total_capital(cfg: dict) -> float:
     """Initial margin on both legs of every slot plus the idle buffer."""
     s, m = cfg["strategy"], cfg["margin"]
@@ -368,6 +383,8 @@ class Engine:
         self.use_mark = m.get("liquidation_price_source", "last_trade") == "mark"
         self.trigger_on_current = m.get("rebalance_trigger_base",
                                         "initial_margin") == "current_requirement"
+        self.transfer_cap = bool(m.get("transfer_cap", False))
+        self.hl_min_frac = m.get("transfer_cap_hl_min_frac", 0.10)
         self.capital = total_capital(cfg)
         self.st = {c: SlotState() for c in self.coins}
         self.cum = dict.fromkeys(COMPONENTS, 0.0)
@@ -375,7 +392,7 @@ class Engine:
         self.daily: list[dict] = []
         self.n = dict(missing_hl_funding=0, missing_bn_funding=0, deferred_fills=0,
                       liquidations=0, rebalances=0, rebalance_no_surplus=0, spread_stops=0,
-                      mark_fallbacks=0)
+                      mark_fallbacks=0, transfers_capped=0, rebalance_capped_out=0)
 
     # -- booking --
     def _book(self, pos: Position, key: str, amount: float, leg: Leg | None = None):
@@ -546,12 +563,29 @@ class Engine:
                 if x <= self.wfee:
                     self.n["rebalance_no_surplus"] += 1
                     return
+                if self.transfer_cap:
+                    cap = self._transferable(pos, leg_high, c_hl if high == "hl" else c_bn)
+                    if cap < x:
+                        x = cap
+                        self.n["transfers_capped"] += 1
+                        if x <= self.wfee:
+                            self.n["rebalance_capped_out"] += 1
+                            return
                 leg_high.cash -= x
                 pos.transfer = (leg_low, x - self.wfee, h_end + self.delay)
                 self._book(pos, "transfer_fees", -self.wfee)
                 pos.n_rebalances += 1
                 self.n["rebalances"] += 1
                 return
+
+    def _transferable(self, pos: Position, leg: Leg, price: float) -> float:
+        """The paying leg's venue limit on a transfer out, at that venue's bar close."""
+        wallet = leg.margin0 + leg.cash
+        upnl = leg.side * pos.qty * (price - leg.entry)
+        notional = pos.qty * price
+        if leg.venue == "binance":
+            return binance_transferable(wallet, upnl, notional / self.lev)
+        return hyperliquid_transferable(wallet + upnl, notional, self.lev, self.hl_min_frac)
 
     def _snapshot(self, h_end: int):
         unreal, deployed, n_open = 0.0, 0.0, 0
@@ -684,16 +718,24 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--seeds", type=int, default=None, help="random-entry seeds (default: config)")
     p.add_argument("--force", action="store_true",
                    help="allow overwriting the saved as-specified tables")
+    p.add_argument("--transfer-cap", action="store_true",
+                   help="post-hoc sensitivity: cap rebalance transfers at each venue's withdrawable "
+                        "amount (margin.transfer_cap; DECISIONS.md 2026-11-09); outputs get a "
+                        "'capped_' prefix and never overwrite the frozen tables")
     args = p.parse_args(argv)
     base_cfg = load_config(args.config) if args.config else load_config()
     label, _, _ = period_bounds(base_cfg, args.period, args.start, args.end)
     out = args.out_dir or report_dir(base_cfg) / "tables"
     out.mkdir(parents=True, exist_ok=True)
     prefix = out_prefix(label, args.variant)
+    if args.transfer_cap:
+        prefix = prefix + "capped_"
     if (label == "design" and args.variant == "as_specified"
             and (out / f"{prefix}summary.csv").exists() and not args.force):
         raise SystemExit("as-specified tables exist and are kept as the record; use --force")
     cfg = variant_cfg(base_cfg, args.variant)
+    if args.transfer_cap:
+        cfg["margin"]["transfer_cap"] = True
     inputs = load_inputs(cfg, period=args.period, allow_holdout=args.allow_holdout,
                          start=args.start, end=args.end)
 
@@ -728,10 +770,14 @@ def main(argv: list[str] | None = None) -> None:
     dec.to_csv(out / f"{prefix}decomposition_benchmarks.csv")
     rand.to_csv(out / f"{prefix}random_entry.csv", index_label="seed")
 
+    if args.transfer_cap:   # capped and capped-out transfers are only in the counters
+        pd.DataFrame({"strategy": base.counters, "zero_cost": zc.counters,
+                      "always_on": always.counters}).to_csv(out / f"{prefix}counters.csv")
     for name, r in (("strategy", base), ("zero_cost", zc), ("always_on", always)):
         print(name, metrics.sanity(r, inputs))
     print(summary.round(4).to_string())
-    if all((out / f"{out_prefix(label, v)}summary.csv").exists() for v in PREFIX):
+    if not args.transfer_cap and all((out / f"{out_prefix(label, v)}summary.csv").exists()
+                                     for v in PREFIX):
         summ, dec = write_comparison(out, label)
         print(dec.round(0).to_string())
 

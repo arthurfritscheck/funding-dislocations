@@ -9,6 +9,9 @@
    strategy, zero-cost and always-on runs on the Binance-hack days
    (`robustness.holdout_stress_days`), with and without those days. Splitting the daily P&L is
    not a rerun without the days.
+3. Transfer cap (report/tables/transfer_cap_liquidations_by_leg.csv): liquidated trades by
+   liquidated leg, frozen corrected model against the post-hoc transfer cap
+   (`python -m src.backtest.engine --transfer-cap`), both periods, from the saved ledgers.
 
 The held-out part reruns the frozen held-out strategy, zero-cost and always-on runs exactly as
 `python -m src.backtest.engine --period holdout --allow-holdout` does, and stops unless their
@@ -131,6 +134,36 @@ def holdout_liquidations(cfg: dict, inputs: dict, trades: pd.DataFrame) -> list[
     return rows
 
 
+def liquidations_by_leg(inputs: dict, trades: pd.DataFrame) -> pd.DataFrame:
+    """Liquidated trades grouped by the leg that was liquidated (venue and long/short): count,
+    total P&L and price-spread P&L of those trades."""
+    liq = trades[trades["exit_reason"] == "liquidation"]
+    rows = []
+    for tr in liq.itertuples(index=False):
+        tr = pd.Series(tr._asdict())
+        venue = F.liquidated_leg(tr, inputs[tr["coin"]])
+        side = leg_sides(tr)[venue] if venue in ("hyperliquid", "binance") else 0
+        rows.append(dict(leg=f"{venue} {'long' if side > 0 else 'short'}",
+                         total=float(tr["total"]), price_spread=float(tr["price_spread"])))
+    df = pd.DataFrame(rows, columns=["leg", "total", "price_spread"])
+    return (df.groupby("leg").agg(liquidated_trades=("total", "size"), total=("total", "sum"),
+                                  price_spread=("price_spread", "sum")).reset_index())
+
+
+def transfer_cap_legs(cfg: dict, holdout_inputs: dict) -> pd.DataFrame:
+    """Frozen corrected model against the post-hoc transfer cap (DECISIONS.md 2026-11-09), both
+    periods, from the saved trade ledgers: liquidations by leg."""
+    out = []
+    design_inputs = E.load_inputs(E.variant_cfg(cfg, "corrected"), period="design")
+    for period, pre, inputs in (("design", "", design_inputs),
+                                ("holdout", "holdout_", holdout_inputs)):
+        for run, name in (("frozen", "corrected"), ("transfer_cap", "corrected_capped")):
+            trades = pd.read_csv(TABLES / f"{pre}backtest_{name}_trades.csv")
+            out.append(liquidations_by_leg(inputs, trades).assign(period=period, run=run))
+    cols = ["period", "run", "leg", "liquidated_trades", "total", "price_spread"]
+    return pd.concat(out, ignore_index=True)[cols]
+
+
 # --- Stress window -------------------------------------------------------------------------
 
 def window_split(r: E.Result, days: list[str], withdrawal_fee: float) -> dict:
@@ -183,6 +216,9 @@ def main(argv: list[str] | None = None) -> None:
     liq.to_csv(TABLES / "liquidation_bars.csv", index=False)
     win = stress_window(cfg, runs)
     win.to_csv(TABLES / "holdout_stress_window.csv")
+    legs = transfer_cap_legs(cfg, inputs)
+    legs.to_csv(TABLES / "transfer_cap_liquidations_by_leg.csv", index=False)
+    print(legs.round(2).to_string())
     with pd.option_context("display.width", 200, "display.max_columns", 30):
         print(liq.to_string(float_format=lambda v: f"{v:.4f}"))
         print(win.to_string())

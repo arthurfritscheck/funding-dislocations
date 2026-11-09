@@ -98,6 +98,13 @@ margin:
   # last_trade / initial_margin.
   liquidation_price_source: mark   # mark: Binance mark klines (BN leg), Binance index klines (HL)
   rebalance_trigger_base: current_requirement   # qty x current price / leverage
+  # Post-hoc transfer cap (DECISIONS.md 2026-11-09), from the venues' documentation; OFF in the
+  # frozen model. When true, a rebalance moves at most what the paying leg's venue lets it transfer:
+  #   binance:     min(wallet balance (no unrealised P&L), wallet + unrealised P&L - initial margin)
+  #   hyperliquid: equity - max(initial margin at leverage_per_leg, hl_min_frac x position value)
+  # Turned on only by the engine CLI's --transfer-cap (outputs *_corrected_capped_*).
+  transfer_cap: false
+  transfer_cap_hl_min_frac: 0.10   # Hyperliquid docs: remaining margin >= 10% of position value
   withdrawal_fee_usd: 1.0
   transfer_delay_hours: 2
   # Returns are reported on total capital: initial margin on both venues plus the buffer.

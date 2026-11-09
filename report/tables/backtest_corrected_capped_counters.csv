@@ -1,0 +1,11 @@
+,strategy,zero_cost,always_on
+missing_hl_funding,7,7,30
+missing_bn_funding,0,0,0
+deferred_fills,0,0,0
+liquidations,38,39,58
+rebalances,301,280,394
+rebalance_no_surplus,0,0,0
+spread_stops,0,0,0
+mark_fallbacks,0,0,0
+transfers_capped,311,287,1083
+rebalance_capped_out,85,80,852

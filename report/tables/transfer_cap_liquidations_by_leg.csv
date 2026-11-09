@@ -1,0 +1,12 @@
+period,run,leg,liquidated_trades,total,price_spread
+design,frozen,binance long,11,-4374.969019201203,-3843.3538171345926
+design,frozen,binance short,1,-447.67055987227036,-245.72222196077382
+design,frozen,hyperliquid short,26,355.39471487737114,2758.1610014652942
+design,transfer_cap,binance long,10,-3436.866951858852,-2943.086776464401
+design,transfer_cap,binance short,1,-386.5065648852808,-192.9088135880129
+design,transfer_cap,hyperliquid short,27,-3870.572166675562,-1395.7443125017896
+holdout,frozen,binance long,1,-2028.1085009340525,-1918.112283096829
+holdout,frozen,hyperliquid long,1,-1121.0354747913304,-966.8740462385938
+holdout,frozen,hyperliquid short,2,-383.8130563730223,-166.59270967112752
+holdout,transfer_cap,binance long,2,-363.7557266753157,-39.55091348928727
+holdout,transfer_cap,hyperliquid short,4,-176.02735557642853,332.18985981164633
