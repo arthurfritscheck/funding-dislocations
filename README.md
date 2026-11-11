@@ -5,6 +5,8 @@
 - **Held-out result (2026-07-01 to 2026-10-31, run once on frozen code):** -$3,885 (Sharpe -2.15), a loss even before costs and worse than 97% of 200 random-entry runs.
 
 **Report:** [report/report.md](report/report.md) · [report/report.pdf](report/report.pdf) (main report 8 pages, appendix 5).
+**Logs:** [decisions](report/decisions.md) (every design choice, dated, with its reason) ·
+[limitations](report/limitations.md) (every known simplification with its likely bias).
 
 ## The question
 
@@ -79,8 +81,9 @@ src/backtest/        hourly engine (leg margin, liquidation, rebalancing), costs
 notebooks/           01 exploration, 02 strategy, 03 robustness (they call src/ only)
 scripts/             universe selection, survivorship check, PDF render, one-off probes
 tests/               pytest suite (hand-computed expected values for the backtest)
-report/              report.md and report.pdf, tables/ (every number in the report),
-                     figures/ (final/ holds the report's figures), data-quality reports
+report/              report.md and report.pdf, decisions.md and limitations.md (project logs),
+                     tables/ (every number in the report), figures/ (final/ holds the
+                     report's figures), data-quality reports
 data/                raw/ and clean/ (empty in git)
 ```
 
