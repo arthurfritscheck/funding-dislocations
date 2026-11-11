@@ -399,4 +399,5 @@ if __name__ == "__main__":
     res = run()
     pd.set_option("display.width", 250)
     for k in ("episode_summary", "episode_summary_net_of_mechanical", "carry_breakeven"):
-        print(f"\n== {k}\n{res[k].astype(float).round(3).to_string()}")
+        # round() leaves text columns (carry_breakeven's coin list) as they are
+        print(f"\n== {k}\n{res[k].round(3).to_string()}")

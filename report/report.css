@@ -1,0 +1,6 @@
+/* Print style for report/report.pdf (scripts/render_report.py): A4, 2 cm margins, 10.5 pt. */
+@page { size: A4; margin: 2cm; }
+body { font-family: Georgia, serif; font-size: 10.5pt; line-height: 1.25; max-width: none; margin: 0; }
+img { max-width: 100%; }
+table { border-collapse: collapse; font-size: 9.5pt; }
+td, th { border: 1px solid #ccc; padding: 2px 5px; }
