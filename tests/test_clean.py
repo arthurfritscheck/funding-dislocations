@@ -1,4 +1,4 @@
-"""Alignment tests (hand-computed synthetic cases) and Phase 2 item 8 data-quality checks."""
+"""Alignment tests (hand-computed synthetic cases) and the data-quality checks on the real panel."""
 
 import glob
 
@@ -137,7 +137,7 @@ def test_near_cap_flagged_not_removed_synthetic():
     assert all("bn_near_cap" in _flags(p, i) for i in range(4))
 
 
-# --- Phase 2 item 8 checks on the real design-period panel ------------------------------------
+# --- Data-quality checks on the real design-period panel --------------------------------------
 
 PANEL = ROOT / "data" / "clean" / "panel.parquet"
 needs_panel = pytest.mark.skipif(not PANEL.exists(), reason="run python -m src.clean.align first")

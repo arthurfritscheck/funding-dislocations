@@ -1,4 +1,4 @@
-"""Descriptive statistics of the funding gap, design period only (Phase 3 items 1 and 6).
+"""Descriptive statistics of the funding gap, and the gap-over-time charts, design period only.
 
 All rates in the panel are hourly fractions; tables report APR = hourly x 8760.
 The gap is the known-at-t series (f_hl_known - f_bn_known); venue funding levels use the
@@ -31,7 +31,8 @@ SURFACE, INK, INK_2, GRID, SERIES = "#fcfcfb", "#0b0b0b", "#52514e", "#e6e5e1", 
 
 
 def load_design_panel(cfg: dict | None = None) -> pd.DataFrame:
-    """The clean panel, cut at the design cut-off whatever the file contains (rule 3)."""
+    """The clean panel, cut at the design cut-off whatever the file contains (held-out data
+    stays unread)."""
     cfg = cfg or load_config()
     _, end = period_ms(cfg, "design")
     p = pd.read_parquet(ROOT / cfg["paths"]["clean"] / "panel.parquet")

@@ -1,4 +1,4 @@
-"""Figures for the Phase 4 backtest (design period). Same tokens and palette as gap_stats."""
+"""Figures for the design-period backtest. Same tokens and palette as gap_stats."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ import pandas as pd  # noqa: E402
 
 from src.analysis.gap_stats import FIGURES, GRID, INK, INK_2, SURFACE, _style  # noqa: E402,F401
 
-PALETTE = ["#2a78d6", "#eb6834", "#1baf7a"]   # fixed categorical order (validated in Phase 3)
+# Fixed categorical order; lightness, chroma and colour-blind separation checked.
+PALETTE = ["#2a78d6", "#eb6834", "#1baf7a"]
 LABELS = {"hl_funding": "Hyperliquid funding", "bn_funding": "Binance funding",
           "price_spread": "Price spread", "fees": "Fees", "slippage": "Slippage",
           "transfer_fees": "Transfer fees", "liquidation": "Liquidation penalty",

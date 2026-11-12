@@ -1,5 +1,5 @@
-"""Failure cases: the worst trades of the corrected baseline, design period only (docs/plan.md
-Phase 5 item 7; DECISIONS.md 2026-11-08). For each trade: its loss by component, summary
+"""Failure cases: the worst trades of the corrected baseline, design period only
+(report/decisions.md, 2026-11-08). For each trade: its loss by component, summary
 statistics, and the price, mark and funding paths around it, so the cause can be classified.
 
 Paths are hourly and stamped at the end of each hour (a close at H+1h, funding for [H, H+1h)):
@@ -60,8 +60,8 @@ def liquidated_leg(trade, d: pd.DataFrame) -> str:
 def load_marks(cfg: dict, coin: str, period: str = "design",
                allow_holdout: bool = False) -> pd.DataFrame:
     """Binance 1h mark- and index-price klines for one coin, by kline open hour, unit-scaled,
-    cut at the period end (default the design period; a later period needs allow_holdout=True,
-    CLAUDE.md rule 3)."""
+    cut at the period end (default the design period; a later period needs the held-out opt-in,
+    allow_holdout=True)."""
     _, end_ms = period_ms(cfg, period)
     check_period_allowed(cfg, end_ms, allow_holdout)
     raw, unit = ROOT / cfg["paths"]["raw"] / "binance", cfg["symbols"][coin]["bn_unit"]

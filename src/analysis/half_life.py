@@ -1,11 +1,11 @@
-"""Persistence of the funding gap, design period only (Phase 3 item 2, hypothesis H1).
+"""Persistence of the funding gap, design period only (hypothesis H1).
 
 1. AR(1) on daily-averaged gaps per coin:  g_t = a + phi * g_{t-1} + e_t,
    half-life = ln 0.5 / ln phi (days). 95% CI from phi +/- 1.96 SE mapped through the
    half-life formula (monotone for 0 < phi < 1). OLS and Newey-West (HAC) SEs are reported.
 2. The same AR(1) on rolling 90-day windows (step one day).
 3. Episodes on the hourly gap: start when |gap| rises above a threshold, end when it falls
-   below half of it (Phase 3 item 2). Durations are summarised with Kaplan-Meier survival
+   below half of it. Durations are summarised with Kaplan-Meier survival
    curves; episodes still open at the end of the period are right-censored.
 
 All gaps are the known-at-t series in APR. No trading rules here.
@@ -131,10 +131,10 @@ def episodes(gap_apr: np.ndarray, hours: np.ndarray, theta: float, *,
              end_on_sign_change: bool = False) -> pd.DataFrame:
     """Episodes of |gap| > theta that end when |gap| < theta / 2.
 
-    With end_on_sign_change (DECISIONS.md 2026-11-04, used by the analysis via config.yaml) an
+    With end_on_sign_change (report/decisions.md, 2026-11-04, used by the analysis via config.yaml) an
     episode also ends at the first hour whose gap has the opposite sign; if that hour's |gap| is
-    above theta it starts a new episode in the other direction. Without it, this is the plan's
-    original definition (Phase 3 item 2).
+    above theta it starts a new episode in the other direction. Without it, this is the original
+    definition (the episode ends only below half the threshold).
 
     duration_h counts the hours from the first hour of the episode up to (not including) the hour
     that ends it. NaN hours leave the state unchanged. An episode open at the end of the series is
@@ -260,7 +260,7 @@ def carry_breakeven(eps: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 # --- Charts --------------------------------------------------------------------------------
 
 def plot_half_lives(hl: pd.DataFrame, path: Path | None = None, max_cap_days: float = 10.0):
-    """Half-life by coin with 95% Newey-West (HAC) CIs, sorted (DECISIONS.md 2026-11-04). The
+    """Half-life by coin with 95% Newey-West (HAC) CIs, sorted (report/decisions.md, 2026-11-04). The
     axis fits the widest finite CI, up to max_cap_days; CIs beyond it are clipped with an arrow."""
     d = hl.sort_values("half_life_days").copy()
     d["hl_lo"], d["hl_hi"] = d["hl_lo_hac"], d["hl_hi_hac"]
@@ -364,8 +364,8 @@ def run(cfg: dict | None = None) -> dict:
     sign_end = a["episodes_end_on_sign_change"]
     hl = half_lives(panel)
     roll = rolling_ar1(panel, 90)
-    eps = all_episodes(panel, thresholds, end_on_sign_change=sign_end)   # raw gap (DECISIONS.md)
-    # BNB net of its mechanical gap: description only (DECISIONS.md 2026-11-04).
+    eps = all_episodes(panel, thresholds, end_on_sign_change=sign_end)   # raw gap (report/decisions.md)
+    # BNB net of its mechanical gap: description only (report/decisions.md, 2026-11-04).
     rest = resting_rates(panel, a["interest_rate_per_8h"], a["resting_tolerance_per_hour"],
                          binance_interest_by_coin(cfg))
     mech = {c: rest.loc[c, "mechanical_gap_apr"] / APR for c in rest.index

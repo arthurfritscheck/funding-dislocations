@@ -2,7 +2,7 @@
 
 Binance `fundingTime` is the settlement moment; the rate applies to the interval that ends there.
 The interval for settlement i is the spacing to the previous Regular settlement, after rounding
-both stamps to the nearest hour (DECISIONS.md, 2026-11-04). `fundingInfo` only shows today's
+both stamps to the nearest hour (report/decisions.md, 2026-11-04). `fundingInfo` only shows today's
 interval, so history must come from the spacing.
 
 Flags (semicolon-separated in `flags`):

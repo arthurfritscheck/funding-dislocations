@@ -1,9 +1,9 @@
 # Single source of truth for every date, cost and parameter in the study.
 # Dates are UTC calendar days, inclusive at both ends. src/config.py converts each
 # period to a half-open millisecond interval [start_ms, end_ms).
-# null = not decided yet. Fill it in by hand and log the choice in DECISIONS.md.
+# null = not decided yet. Fill it in by hand and log the choice in report/decisions.md.
 
-# --- Sample split (locked in Phase 0; do not change) -----------------------------
+# --- Sample split (locked before any analysis; do not change) -----------------------------
 periods:
   sample:
     start: "2024-08-01"
@@ -11,13 +11,13 @@ periods:
   design:            # exploration and strategy design
     start: "2024-08-01"
     end: "2026-06-30"
-  holdout:           # untouched until Phase 5; run once after the v1-frozen tag
+  holdout:           # untouched until the held-out test; run once after the v1-frozen tag
     start: "2026-07-01"
     end: "2026-10-31"
 
 # --- Coin universe ---------------------------------------------------------------
-# Rule (docs/plan.md, Phase 1): listed as a perp on both venues for the whole sample;
-# rank by average daily Hyperliquid volume over the selection window; take the top
+# Selection rule, fixed in advance, before the funding analysis: listed as a perp on both
+# venues for the whole sample; rank by average daily Hyperliquid volume over the selection window; take the top
 # 12-15; always include the anchors. Chosen by hand, before looking at funding data.
 universe:
   selection_window:
@@ -26,7 +26,7 @@ universe:
   min_coins: 12
   max_coins: 15
   anchors: [BTC, ETH, SOL]
-  # Fixed 2026-11-04 (DECISIONS.md), from report/universe_candidates.csv; ordered by rank.
+  # Fixed 2026-11-04 (report/decisions.md), from report/universe_candidates.csv; ordered by rank.
   coins: [BTC, ETH, SOL, kPEPE, SUI, WIF, TIA, DOGE, WLD, AAVE, APT, kBONK, AVAX, TAO, BNB]
 
 # Hand-written symbol map, one entry per coin in universe.coins.
@@ -57,12 +57,12 @@ fees:
   hyperliquid:       # base tier, perps
     taker_bps: 4.5   # 0.045%
     maker_bps: 1.5   # 0.015%
-  binance:           # base tier (VIP 0), USD-M futures, no BNB discount; confirmed by the user
-    taker_bps: 5.0   # 0.050%  (DECISIONS.md, 2026-11-04)
+  binance:           # base tier (VIP 0), USD-M futures, no BNB discount; confirmed against Binance's fee schedule
+    taker_bps: 5.0   # 0.050%  (report/decisions.md, 2026-11-04)
     maker_bps: 2.0   # 0.020%
 
 # --- Slippage (bps per fill) -------------------------------------------------------
-# Provisional values from docs/plan.md Phase 4 item 3; varied in Phase 5.
+# Assumed values; varied in the robustness checks.
 slippage:
   majors_bps: 2.0    # coins listed in slippage.majors
   others_bps: 8.0
@@ -74,11 +74,11 @@ execution:
   hyperliquid_leg: taker
   binance_leg: taker
 
-# --- Margin and capital (Phase 4; DECISIONS.md 2026-11-08; null = not decided yet) ----
+# --- Margin and capital (report/decisions.md, 2026-11-08; null = not decided yet) ----
 margin:
   leverage_per_leg: 3
   # Maintenance margin as a fraction of leg notional, per venue and coin, assumed constant over
-  # the sample (snapshots 2026-11-08; LIMITATIONS.md).
+  # the sample (snapshots 2026-11-08; see report/limitations.md).
   #   hyperliquid: half the initial margin at the coin's max leverage, 1 / (2 * maxLeverage), first
   #     margin tier (data/raw/hyperliquid/meta_snapshot/meta.json).
   #   binance: effective rate at a $10,000 notional, (10000 * rate - cum) / 10000, from Binance's
@@ -94,11 +94,11 @@ margin:
   capital_buffer_frac: 0.5         # idle cash = 50% of initial margin on both venues
   forced_close_penalty_bps: 100    # liquidated leg closes 100 bps worse than its liquidation price
   rebalance_trigger_frac: 0.5      # move collateral when a leg's margin < 50% of the trigger base
-  # Model-fidelity corrections (DECISIONS.md 2026-11-08); the as-specified run used
+  # Model-fidelity corrections (report/decisions.md, 2026-11-08); the as-specified run used
   # last_trade / initial_margin.
   liquidation_price_source: mark   # mark: Binance mark klines (BN leg), Binance index klines (HL)
   rebalance_trigger_base: current_requirement   # qty x current price / leverage
-  # Post-hoc transfer cap (DECISIONS.md 2026-11-09), from the venues' documentation; OFF in the
+  # Post-hoc transfer cap (report/decisions.md, 2026-11-09), from the venues' documentation; OFF in the
   # frozen model. When true, a rebalance moves at most what the paying leg's venue lets it transfer:
   #   binance:     min(wallet balance (no unrealised P&L), wallet + unrealised P&L - initial margin)
   #   hyperliquid: equity - max(initial margin at leverage_per_leg, hl_min_frac x position value)
@@ -110,15 +110,15 @@ margin:
   # Returns are reported on total capital: initial margin on both venues plus the buffer.
   return_base: total_capital
 
-# --- Strategy (decided in writing after Phase 3, prompt 2.4) -----------------------
-# Baseline signal (DECISIONS.md, 2026-11-04; replaces the plan's 20% APR / 3-hour rule):
+# --- Strategy (fixed in writing after the exploratory analysis, before any backtest) ---
+# Baseline signal (report/decisions.md, 2026-11-04; replaces the initially planned 20% APR / 3-hour rule):
 # signal = per-coin trailing mean of the known-at-t gap over signal_window_days; enter when
 # |signal| > theta_in_apr, shorting the higher-funding venue and going long the other; exit when
 # |signal| < theta_out_apr or the signal changes sign. No regime filters in the baseline.
 strategy:
   signal: trailing_mean_known_gap
   signal_window_days: 7
-  # Robustness grid (DECISIONS.md 2026-11-08): checks only, never used to re-pick parameters.
+  # Robustness grid (report/decisions.md, 2026-11-08): checks only, never used to re-pick parameters.
   robustness:
     theta_in_apr: [0.05, 0.075, 0.10, 0.15, 0.20]
     theta_out_apr: [0.0, 0.015, 0.03, 0.05]
@@ -135,21 +135,21 @@ strategy:
   max_concurrent_positions: 15
   max_positions_per_coin: 1
   # After a spread stop or forced close, no re-entry in that coin until the signal has first met
-  # the exit rule (|signal| < theta_out_apr or a sign change). DECISIONS.md 2026-11-08.
+  # the exit rule (|signal| < theta_out_apr or a sign change). report/decisions.md, 2026-11-08.
   rearm_after_stop: exit_rule
 
-# --- Benchmarks (docs/plan.md Phase 4 item 7) -------------------------------------------
+# --- Benchmarks (zero cost, always-on, random entry) -----------------------------------
 benchmarks:
   random_entry_seeds: 200
   always_on_direction: short_hl    # short Hyperliquid / long Binance in every coin
 
-# --- Robustness (docs/plan.md Phase 5 items 2-6; DECISIONS.md 2026-11-08) -----------------
+# --- Robustness checks (design period; report/decisions.md, 2026-11-08) -----------------
 # Design period, corrected model. Checks only: never used to change the baseline parameters.
 # The entry/exit/window grid is strategy.robustness.
 robustness:
   cost_multiples: [0.5, 1.0, 2.0, 3.0]   # fees and slippage, jointly and as a fee x slippage grid
   breakeven_tol: 0.005                   # bisection tolerance on the joint cost multiple
-  # Added after the first backtest run (the plan's case was maker on one leg); labelled post hoc.
+  # Added after the first backtest run (the case specified before the first backtest was maker on one leg); labelled post hoc.
   maker_scenario:                        # reported separately; maker fills are not guaranteed
     hyperliquid_leg: maker
     binance_leg: maker
@@ -163,11 +163,11 @@ robustness:
     capital_buffer_frac: [0.0, 0.25, 0.5]
     tail_event_days: ["2025-10-10", "2025-10-11"]   # UTC days excluded in the tail-event table
   failure_cases: {n_worst: 5, pad_days: 3}   # worst trades and days shown around each
-  # Held-out stress window reported separately (the Binance hack; DECISIONS.md 2026-11-08, held-out
-  # run entry). UTC days; report_checks splits the held-out daily P&L on them (not a rerun).
+  # Held-out stress window reported separately (the Binance hack; report/decisions.md, 2026-11-08,
+  # held-out run). UTC days; report_checks splits the held-out daily P&L on them (not a rerun).
   holdout_stress_days: ["2026-10-29", "2026-10-30", "2026-10-31"]
 
-# --- Cleaning (DECISIONS.md, 2026-11-04) -------------------------------------------
+# --- Cleaning (report/decisions.md, 2026-11-04) -------------------------------------------
 cleaning:
   off_hour_tolerance_min: 5         # funding stamps further than this from the hour are flagged
   binance_intervals_h: [1, 4, 8]    # any other settlement spacing is flagged
@@ -180,7 +180,7 @@ cleaning:
   cap_near_frac: 0.95               # |rate| >= this share of the cap is flagged "near cap"
   spread_flag_abs: 0.02             # |log price spread| above this is flagged
 
-# --- Analysis (Phase 3) ------------------------------------------------------------
+# --- Exploratory analysis ----------------------------------------------------------
 analysis:
   # Resting rate = documented interest baseline, the funding rate when the premium sits inside
   # the clamp: 0.01% per 8h on both venues (0.00125% per hour; on Binance 0.01% x interval/8 per
@@ -188,13 +188,13 @@ analysis:
   # counts as resting. The most frequent observed rate is reported only as a sanity check.
   interest_rate_per_8h: 0.0001
   # Per-symbol Binance overrides, from Binance's GET /fapi/v1/premiumIndex `interestRate`
-  # (snapshot 2026-11-04, assumed constant over the sample; DECISIONS.md).
+  # (snapshot 2026-11-04, assumed constant over the sample; report/decisions.md).
   binance_interest_overrides_per_8h:
     BNBUSDT: 0.0
   resting_tolerance_per_hour: 1.0e-10
   gap_thresholds_apr: [0.10, 0.25, 0.50]
   baseline_window_days: 30           # trailing window separating the slow-moving part of the gap
-  episodes_end_on_sign_change: true  # DECISIONS.md 2026-11-04: a sign change ends the episode
+  episodes_end_on_sign_change: true  # report/decisions.md, 2026-11-04: a sign change ends the episode
   # Example mid-cap for the gap-over-time chart, fixed before computing gap statistics: the
   # median non-anchor coin by Aug-Oct 2024 HL volume (6th of the 12 non-anchor coins).
   mid_cap_example: WLD

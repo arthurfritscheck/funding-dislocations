@@ -52,11 +52,11 @@ def period_bounds(cfg: dict, period: str | None = "design", start: str | None = 
 
 
 def check_period_allowed(cfg: dict, end_ms: int, allow_holdout: bool) -> None:
-    """CLAUDE.md rule 3: data after the design cut-off is read only with an explicit opt-in
-    (`allow_holdout=True`, CLI `--allow-holdout`), i.e. only for the Phase 5 held-out run."""
+    """Data after the design cut-off is read only with an explicit opt-in
+    (`allow_holdout=True`, CLI `--allow-holdout`), i.e. only for the held-out test."""
     if end_ms > period_ms(cfg, "design")[1] and not allow_holdout:
         raise ValueError("this period reaches past the design cut-off; held-out data is read only "
-                         "with allow_holdout=True / --allow-holdout (Phase 5, CLAUDE.md rule 3)")
+                         "with allow_holdout=True / --allow-holdout")
 
 
 def warmup_start_ms(cfg: dict, start_ms: int, window_days: float) -> int:

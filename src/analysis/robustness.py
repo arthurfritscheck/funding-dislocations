@@ -1,5 +1,5 @@
-"""Robustness checks on the corrected backtest, design period only (docs/plan.md Phase 5 items
-2-6; DECISIONS.md 2026-11-08). Every check is a config variant run through `src.backtest.engine`.
+"""Robustness checks on the corrected backtest, design period only (specified in
+report/decisions.md, 2026-11-08). Every check is a config variant run through `src.backtest.engine`.
 None of these results may be used to change the baseline parameters.
 
 Checks: cost sensitivity and the breakeven cost multiple; a maker scenario (reported separately);
@@ -44,7 +44,7 @@ DIVERGING = LinearSegmentedColormap.from_list("gain_loss", [NEG, MID, POS])
 # --- Config variants -------------------------------------------------------------------------
 
 def baseline_cfg(cfg: dict | None = None) -> dict:
-    """The corrected model (DECISIONS.md 2026-11-08) with the baseline strategy parameters."""
+    """The corrected model (report/decisions.md, 2026-11-08) with the baseline strategy parameters."""
     return E.variant_cfg(cfg if cfg is not None else load_config(), "corrected")
 
 

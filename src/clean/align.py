@@ -4,11 +4,11 @@ Row ``hour = H`` describes the hour [H, H+1h). All timestamps are UTC ms.
 
 Funding (hourly-equivalent rates, fractions per hour):
   f_hl_realised  Hyperliquid funding for [H, H+1h): the fundingHistory row stamped H+1h
-                 (DECISIONS.md: a row stamped T covers [T-1h, T)). Already hourly.
+                 (report/decisions.md: a row stamped T covers [T-1h, T)). Already hourly.
   f_bn_realised  Binance settlement rate / interval for every hour of the interval it covers:
                  a settlement at T with interval I covers [T-I, T).
   f_*_known      value usable for a decision taken at time H (the start of the row's hour): the
-                 latest row stamped T with T + 1h <= H (DECISIONS.md: known only from T+1h).
+                 latest row stamped T with T + 1h <= H (report/decisions.md: known only from T+1h).
                  Missing rows are therefore carried forward automatically.
   bn_interval_h  interval of the Binance settlement covering the hour.
   bn_settle      True if a Binance settlement happens at the end of this hour (at H+1h); Binance
@@ -28,11 +28,11 @@ Periods: any period named in config.yaml (`--period`) or explicit inclusive date
 `--end`). The panel also holds the signal warm-up, `strategy.signal_window_days` before the period
 start (never before the sample start, so the design panel has none): rows before the start come
 from earlier data and are used only to warm the signal up. Periods past the design cut-off need
-`--allow-holdout` (CLAUDE.md rule 3). The design panel is data/clean/panel.parquet, any other
+`--allow-holdout`. The design panel is data/clean/panel.parquet, any other
 data/clean/panel_<label>.parquet; the report is report/data_quality[_<label>].md.
 
     .venv\\Scripts\\python.exe -m src.clean.align                                   # design
-    .venv\\Scripts\\python.exe -m src.clean.align --period holdout --allow-holdout   # Phase 5 only
+    .venv\\Scripts\\python.exe -m src.clean.align --period holdout --allow-holdout   # held-out test only
 """
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ def bn_funding(raw: pd.DataFrame, symbol: str, hours: np.ndarray, cfg: dict,
 # --- Prices --------------------------------------------------------------------------------
 
 def _closed(c: pd.DataFrame, close_col: str) -> pd.DataFrame:
-    """Drop candles that had not closed when they were fetched (DECISIONS.md)."""
+    """Drop candles that had not closed when they were fetched (report/decisions.md)."""
     return c[c[close_col].astype("int64") < c["fetched_at"].astype("int64")] if not c.empty else c
 
 
@@ -255,7 +255,7 @@ def period_args(p: argparse.ArgumentParser) -> argparse.ArgumentParser:
     p.add_argument("--start", help="ISO start date (inclusive); with --end, overrides --period")
     p.add_argument("--end", help="ISO end date (inclusive)")
     p.add_argument("--allow-holdout", action="store_true",
-                   help="allow periods past the design cut-off (Phase 5 only, CLAUDE.md rule 3)")
+                   help="allow periods past the design cut-off (held-out test only)")
     return p
 
 

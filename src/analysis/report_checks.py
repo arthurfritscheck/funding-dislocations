@@ -1,4 +1,5 @@
-"""Checks behind statements in report/report.md (Phase 6), saved as results files.
+"""Computes the liquidation-bar, stress-window and transfer-cap tables behind statements in
+report/report.md, saved as results files.
 
 1. Liquidation bars (report/tables/liquidation_bars.csv): for the design period's worst trades
    (from the failure-case results files) and every held-out liquidation, the moves in the bar in
@@ -16,7 +17,7 @@
 The held-out part reruns the frozen held-out strategy, zero-cost and always-on runs exactly as
 `python -m src.backtest.engine --period holdout --allow-holdout` does, and stops unless their
 totals match the saved holdout_backtest_corrected_summary.csv to the cent. It reads held-out data,
-so it needs the explicit opt-in (CLAUDE.md rule 3):
+so it needs the explicit held-out opt-in:
 
     python -m src.analysis.report_checks --allow-holdout
 """
@@ -151,8 +152,8 @@ def liquidations_by_leg(inputs: dict, trades: pd.DataFrame) -> pd.DataFrame:
 
 
 def transfer_cap_legs(cfg: dict, holdout_inputs: dict) -> pd.DataFrame:
-    """Frozen corrected model against the post-hoc transfer cap (DECISIONS.md 2026-11-09), both
-    periods, from the saved trade ledgers: liquidations by leg."""
+    """Frozen corrected model against the post-hoc transfer cap (report/decisions.md,
+    2026-11-09), both periods, from the saved trade ledgers: liquidations by leg."""
     out = []
     design_inputs = E.load_inputs(E.variant_cfg(cfg, "corrected"), period="design")
     for period, pre, inputs in (("design", "", design_inputs),
@@ -205,7 +206,7 @@ def stress_window(cfg: dict, runs: dict[str, E.Result]) -> pd.DataFrame:
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--allow-holdout", action="store_true",
-                   help="required: reads held-out data (CLAUDE.md rule 3)")
+                   help="required: reads held-out data")
     args = p.parse_args(argv)
     cfg = load_config()
     check_period_allowed(cfg, period_ms(cfg, "holdout")[1], args.allow_holdout)

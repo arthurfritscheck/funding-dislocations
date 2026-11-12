@@ -1,4 +1,4 @@
-"""Hourly backtest engine for the funding-gap trade (docs/plan.md Phase 4, DECISIONS.md).
+"""Hourly backtest engine for the funding-gap trade (rules in report/decisions.md).
 
 A plain loop over UTC hours with one position slot per coin and a small state machine:
 
@@ -14,7 +14,7 @@ Inputs, one frame per coin with one row per hour H (the hour [H, H+1h)):
   bar_end          a price bar ends at H+1h; h_*, l_*, c_* = that bar's high, low and close
   mh_*, ml_*       optional mark-price high/low over the bar (at bar_end rows) for liquidation
                    checks: Binance mark klines for the BN leg, Binance index klines as the proxy
-                   for Hyperliquid's oracle-based mark price for the HL leg (DECISIONS.md
+                   for Hyperliquid's oracle-based mark price for the HL leg (report/decisions.md
                    2026-11-08). Missing -> the check falls back to the trade high/low (counted).
 Bars are Hyperliquid candles (4h before its hourly history starts, 1h after); Binance 1h klines
 are aggregated over the same span. Hours not covered by a Hyperliquid candle have no boundary:
@@ -156,7 +156,7 @@ def load_inputs(cfg: dict, window_days: float | None = None, period: str | None 
     are then cut to [start, end), so the engine starts flat at the period start with a warmed-up
     signal built only from data before it. The panel must cover the warm-up (`window_days`
     before the start, never before the sample start). Periods past the design cut-off need
-    allow_holdout=True (CLAUDE.md rule 3). Raw files are cut at the period end on load.
+    allow_holdout=True (the held-out opt-in). Raw files are cut at the period end on load.
     """
     label, start_ms, end_ms = period_bounds(cfg, period, start, end)
     check_period_allowed(cfg, end_ms, allow_holdout)
@@ -261,8 +261,8 @@ class SlotState:
 # --- Policies (what to do at a decision time) ----------------------------------------------
 
 class SignalPolicy:
-    """Baseline rule (DECISIONS.md 2026-11-04/08): enter when |signal| > theta_in, short the
-    higher-funding venue; exit when |signal| < theta_out or the sign flips; spread stop; after a
+    """Baseline rule (report/decisions.md, 2026-11-04 and 2026-11-08): enter when |signal| >
+    theta_in, short the higher-funding venue; exit when |signal| < theta_out or the sign flips; spread stop; after a
     stop, re-arm only once the signal meets the exit rule."""
 
     def __init__(self, cfg: dict, theta_in: float | None = None, theta_out: float | None = None):
@@ -339,7 +339,7 @@ class Result:
 
 
 def binance_transferable(wallet: float, upnl: float, initial_margin: float) -> float:
-    """Most a Binance leg can transfer out (post-hoc transfer cap, DECISIONS.md 2026-11-09): no
+    """Most a Binance leg can transfer out (post-hoc transfer cap, report/decisions.md, 2026-11-09): no
     more than its wallet balance, which excludes unrealised P&L, and no more than its available
     margin, wallet + unrealised P&L - initial margin at the current price. Never negative."""
     return max(0.0, min(wallet, wallet + upnl - initial_margin))
@@ -714,13 +714,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--out-dir", type=Path, default=None,
                    help="output directory (default <paths.report>/tables)")
     p.add_argument("--variant", default="corrected", choices=sorted(VARIANTS),
-                   help="model variant (DECISIONS.md 2026-11-08); outputs are prefixed per variant")
+                   help="model variant (report/decisions.md, 2026-11-08); outputs are prefixed "
+                        "per variant")
     p.add_argument("--seeds", type=int, default=None, help="random-entry seeds (default: config)")
     p.add_argument("--force", action="store_true",
                    help="allow overwriting the saved as-specified tables")
     p.add_argument("--transfer-cap", action="store_true",
                    help="post-hoc sensitivity: cap rebalance transfers at each venue's withdrawable "
-                        "amount (margin.transfer_cap; DECISIONS.md 2026-11-09); outputs get a "
+                        "amount (margin.transfer_cap; report/decisions.md, 2026-11-09); outputs get a "
                         "'capped_' prefix and never overwrite the frozen tables")
     args = p.parse_args(argv)
     base_cfg = load_config(args.config) if args.config else load_config()

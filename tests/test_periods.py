@@ -1,4 +1,4 @@
-"""Period-generic pipeline on synthetic data only: config periods and CLI dates, the rule-3 opt-in,
+"""Period-generic pipeline on synthetic data only: config periods and CLI dates, the held-out opt-in,
 the panel's signal warm-up, an engine that starts flat at the period start with a signal built
 only from earlier data, benchmarks, and pass/fail raw coverage. No real data is read.
 

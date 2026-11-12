@@ -7,7 +7,8 @@
 
 Needs the raw data in data/raw/ (not in git; see README.md) and, for the last step, pandoc and
 Chrome/Edge (scripts/render_report.py). Steps that read the held-out period pass
---allow-holdout explicitly (CLAUDE.md rule 3; the held-out run was made once, on v1-frozen).
+--allow-holdout explicitly (held-out data needs this opt-in; the held-out run was made once,
+on v1-frozen).
 Rebuilding rewrites the committed tables, figures, notebooks and report.pdf in place.
 """
 

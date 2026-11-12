@@ -1,4 +1,4 @@
-"""Tests for the 2026-11-08 model-fidelity corrections (CLAUDE.md rule 5, hand-computed values):
+"""Tests for the 2026-11-08 model-fidelity corrections (hand-computed values):
 liquidation on mark prices and the rebalance trigger on the current margin requirement."""
 
 import numpy as np

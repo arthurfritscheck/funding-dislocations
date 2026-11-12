@@ -1,4 +1,4 @@
-"""Final report figures (Phase 6), one consistent style, written to report/figures/final/.
+"""Final report figures, one consistent style, written to report/figures/final/.
 
 Every number a figure draws or prints is read from a CSV in report/tables/ (the results files):
 nothing is recomputed from market data and nothing is typed in by hand. Plotting arithmetic is

@@ -1,4 +1,4 @@
-"""Post-hoc transfer cap (DECISIONS.md 2026-11-09), hand-computed (CLAUDE.md rule 5)."""
+"""Post-hoc transfer cap (report/decisions.md, 2026-11-09), hand-computed."""
 
 import copy
 

@@ -1,6 +1,7 @@
 """When gaps appear, how they co-move, and how they relate to the price spread.
 
-Design period only (Phase 3 items 3-5). Descriptive; no trading rules.
+Design period only: regime regression, cross-coin correlations, gap versus price spread.
+Descriptive; no trading rules.
 
 3. Regime regression on daily data: mean |gap| (% APR) on
      btc_rv      BTC realised volatility, % annualised, from hourly Binance returns

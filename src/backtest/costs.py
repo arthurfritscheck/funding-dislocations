@@ -1,4 +1,4 @@
-"""Trading costs: fees and slippage per fill, all from config.yaml (CLAUDE.md rule 4).
+"""Trading costs: fees and slippage per fill, all from config.yaml, never hard-coded.
 
 Costs are in basis points of the fill's notional. Both are charged on the unslipped fill price
 (the bar open) so the price-spread component stays free of costs and the zero-cost benchmark only

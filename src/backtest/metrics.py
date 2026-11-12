@@ -1,4 +1,4 @@
-"""Backtest metrics (docs/plan.md Phase 4 item 8). Returns are on total capital by default
+"""Backtest metrics. Returns are on total capital by default
 (`config.yaml` margin.return_base); return on deployed capital is reported alongside."""
 
 from __future__ import annotations

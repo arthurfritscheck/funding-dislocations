@@ -124,8 +124,8 @@ def write_report(panel: pd.DataFrame, cfg: dict, period: str, path: Path,
         _, start_ms, end_ms = period_bounds(cfg, period)
     p = {"start": utc(start_ms)[:10], "end": utc(end_ms - HOUR)[:10]}
     design_end = period_bounds(cfg, "design")[2]
-    scope = ("Held-out data is not included (CLAUDE.md rule 3)." if end_ms <= design_end
-             else "This period includes data after the design cut-off (Phase 5).")
+    scope = ("Held-out data is not included." if end_ms <= design_end
+             else "This period includes data after the design cut-off (held-out test).")
     miss = missing_summary(panel)
     flags = flag_counts(panel)
     f8 = factor_of_eight(panel)

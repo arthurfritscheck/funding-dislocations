@@ -1,4 +1,4 @@
-"""Backtest tests (CLAUDE.md rule 5): every function in src/backtest/ against hand-computed values."""
+"""Backtest tests: every function in src/backtest/ against hand-computed values."""
 
 import copy
 import math
