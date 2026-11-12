@@ -148,18 +148,18 @@ one place. Dates are when the decision was made; times are UTC.
     run.
   - Time: net P&L by calendar quarter (UTC), a rolling 90-day Sharpe, and a moving-block bootstrap
     of daily P&L with 7-day blocks (10,000 resamples, seed 0, percentile 95% interval).
-  - Sensitivities added after the first backtest run (not pre-registered): leverage 1.5x, 2x and
-    3x crossed with capital buffers of 0%, 25% and 50% (9 runs), labelled as such in every table.
-    In this model the buffer is idle cash, so it changes only the capital base, not P&L.
+  - Sensitivities added after the first backtest run: leverage 1.5x, 2x and 3x crossed with
+    capital buffers of 0%, 25% and 50% (9 runs), labelled as such in every table. In this model
+    the buffer is idle cash, so it changes only the capital base, not P&L.
 
   Configurations run (counted afterwards): 108 besides the baseline (cost 23 including 7 bisection
   steps, maker 1, grid 59, universe subsets 17, leverage × buffer 8, giving only one P&L per
   leverage). Before that: the baseline in the two model variants, each with zero cost, always-on
   and 200 random-entry seeds.
 - **Maker scenario labelled post hoc.** The both-legs maker scenario is labelled "sensitivity added
-  after the first backtest run", like the leverage and buffer sensitivities, because the
-  pre-registered case was maker on one leg and both legs were specified after the first run had
-  been seen.
+  after the first backtest run", like the leverage and buffer sensitivities, because the case
+  specified before the first backtest was maker on one leg and both legs were specified after the
+  first run had been seen.
 - **Tail-event sensitivity (added after the first backtest run).** For leverage 1.5x, 2x and 3x
   (buffer 50%; the buffer does not change P&L): design-period P&L with and without the daily P&L
   booked on 2025-10-10 and 2025-10-11 (UTC), and those two days' share of total P&L. Excluding the

@@ -157,7 +157,7 @@ robustness:
   majors: [BTC, ETH, SOL]                # universe split (slippage.majors is a separate list)
   rolling_sharpe_days: 90
   bootstrap: {block_days: 7, resamples: 10000, seed: 0, ci: 0.95}
-  # Sensitivities added after the first backtest run (not pre-registered); labelled in tables.
+  # Sensitivities added after the first backtest run; labelled in tables.
   post_hoc:
     leverage_per_leg: [1.5, 2, 3]
     capital_buffer_frac: [0.0, 0.25, 0.5]

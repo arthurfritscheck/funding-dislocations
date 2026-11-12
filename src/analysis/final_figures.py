@@ -581,7 +581,7 @@ def fig8_leverage_tail() -> Path:
     ax.legend(frameon=False, loc="lower right", labelcolor=INK)
     return finish(fig, "08_leverage_tail_post_hoc",
                   f"Net P&L by leverage, with and without {days} (post hoc)",
-                  f"{label[0].upper() + label[1:]}: not pre-registered and not used to choose any "
+                  f"{label[0].upper() + label[1:]}, not used to choose any "
                   "parameter",
                   f"Excluding removes the daily P&L booked on {days} (UTC) only; it is not a rerun "
                   "without those days, so positions liquidated then stay closed. Capital includes the "
